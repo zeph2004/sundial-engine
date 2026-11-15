@@ -60,3 +60,13 @@ sundial-engine/
 │   └── csp/                      # Core pure-Python CSP solver (Domain, Constraints, Search, Heuristics)
 ├── tests/                        # Unit & constraint validation test suite
 └── requirements.txt
+
+# 1. Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Run Phase 1 Exploratory Data Analysis
+python notebooks/01_eda.py
