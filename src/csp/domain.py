@@ -1,7 +1,11 @@
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple, Any
+
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 def load_json(filepath: str | Path) -> Any:
@@ -106,7 +110,7 @@ def get_compatible_venues(
     venues: List[Dict[str, Any]],
     schema: Dict[str, Any],
     include_fallbacks: bool | None = None
-) -> List[str]:
+) -> List[int | str]:
     """
     Returns venueIds matching the session's requiredVenueCategory.
     Uses primary categories plus optional fallback categories from institution_schema.json.
@@ -124,7 +128,7 @@ def get_compatible_venues(
     if include_fallbacks:
         allowed_categories.update(compat_entry.get("fallback", []))
 
-    matched_venue_ids: List[str] = []
+    matched_venue_ids: List[int | str] = []
     for v in venues:
         v_cat = v.get("category", "").strip()
         if v_cat in allowed_categories:
@@ -137,13 +141,18 @@ def build_domains(
     sessions: List[Dict[str, Any]],
     venues: List[Dict[str, Any]],
     schema: Dict[str, Any],
-    include_fallback_venues: bool = False
-) -> Dict[str, List[Tuple[str, int, str]]]:
+    include_fallback_venues: bool = False,
+    affinity_config: Dict[str, Any] | None = None,
+) -> Dict[str, List[Tuple[str, int, int | str]]]:
     """
     Constructs the Unary-Filtered Domain D_i = [(day, start_period, venue_id), ...]
     for every session x_i in X.
+    When `affinity_config` is provided, applies hard sub-pool pruning for specialized
+    categories and orders compatible venues by [Tier 1A -> Tier 1B -> Tier 1C -> Tier 2].
     """
-    domains: Dict[str, List[Tuple[str, int, str]]] = {}
+    from src.csp.affinity import resolve_session_venues_and_tiers
+
+    domains: Dict[str, List[Tuple[str, int, int | str]]] = {}
 
     for s in sessions:
         sid = s["sessionId"]
@@ -152,12 +161,21 @@ def build_domains(
             duration=s["durationPeriods"],
             schema=schema
         )
-        compat_venues = get_compatible_venues(
-            required_category=s["requiredVenueCategory"],
-            venues=venues,
-            schema=schema,
-            include_fallbacks=include_fallback_venues
-        )
+        if affinity_config is not None:
+            compat_venues, _, _ = resolve_session_venues_and_tiers(
+                session=s,
+                venues=venues,
+                schema=schema,
+                affinity_config=affinity_config,
+                include_fallbacks=include_fallback_venues,
+            )
+        else:
+            compat_venues = get_compatible_venues(
+                required_category=s["requiredVenueCategory"],
+                venues=venues,
+                schema=schema,
+                include_fallbacks=include_fallback_venues
+            )
 
         # Cartesian product of valid (day, start_period) x valid venue_id
         domains[sid] = [
@@ -173,14 +191,18 @@ def run_preflight_checks(
     sessions: List[Dict[str, Any]],
     venues: List[Dict[str, Any]],
     schema: Dict[str, Any],
-    include_fallback_venues: bool = False
+    include_fallback_venues: bool = False,
+    affinity_config: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
-    Verifies three necessary (pigeonhole) capacity conditions before search starts:
+    Verifies necessary (pigeonhole) capacity conditions before search starts:
       1. Lecturer Capacity Check
       2. Cohort Capacity Check
       3. Venue Category Capacity Check (per stream)
+      4. Departmental Restricted Sub-Pool Capacity Check (when affinity_config is provided)
     """
+    from src.csp.affinity import resolve_session_venues_and_tiers
+
     ft_slots = set(get_valid_time_slots(is_evening=False, duration=1, schema=schema))
     eve_slots = set(get_valid_time_slots(is_evening=True, duration=1, schema=schema))
     both_slots = ft_slots | eve_slots
@@ -272,10 +294,42 @@ def run_preflight_checks(
         if demand > total_capacity:
             venue_category_violations.append(entry)
 
+    # 4. Restricted Sub-Pool Capacity Check (for hard-locked specialized lab/workshop pools)
+    subpool_violations: List[Dict[str, Any]] = []
+    if affinity_config is not None:
+        policies = affinity_config.get("category_overflow_policies", {})
+        pool_demand: Dict[Tuple[str, bool, Tuple[int | str, ...]], int] = defaultdict(int)
+        for s in sessions:
+            cat = s["requiredVenueCategory"]
+            if not policies.get(cat, {}).get("restrict_to_prefix_or_module_pool", False):
+                continue
+            vids, _, _ = resolve_session_venues_and_tiers(
+                session=s,
+                venues=venues,
+                schema=schema,
+                affinity_config=affinity_config,
+                include_fallbacks=include_fallback_venues,
+            )
+            pool_key = (cat, s["isEveningStream"], tuple(sorted(vids, key=str)))
+            pool_demand[pool_key] += s["durationPeriods"]
+
+        for (cat, is_eve, pool_vids), demand in sorted(pool_demand.items(), key=lambda x: str(x[0])):
+            stream_periods = eve_capacity if is_eve else ft_capacity
+            cap = len(pool_vids) * stream_periods
+            if demand > cap:
+                subpool_violations.append({
+                    "category": cat,
+                    "stream": "evening" if is_eve else "full_time",
+                    "venue_pool": list(pool_vids),
+                    "demand_periods": demand,
+                    "capacity_periods": cap,
+                })
+
     passed = (
         len(lecturer_violations) == 0
         and len(cohort_violations) == 0
         and len(venue_category_violations) == 0
+        and len(subpool_violations) == 0
     )
 
     return {
@@ -302,12 +356,18 @@ def run_preflight_checks(
             "utilization": venue_category_utilization,
             "violations": venue_category_violations,
         },
+        "subpool_check": {
+            "passed": len(subpool_violations) == 0,
+            "violations": subpool_violations,
+        },
     }
 
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parents[2]
     schema = load_json(root / "configs" / "institution_schema.json")
+    affinity_path = root / "configs" / "atc_venue_affinity.json"
+    affinity_cfg = load_json(affinity_path) if affinity_path.exists() else None
     dataset = load_json(root / "data" / "raw" / "atc" / "atc-timetable-dataset.json")
     sessions = load_json(root / "data" / "raw" / "atc" / "atc-csp-sessions.json")["sessions"]
     venues = dataset["venues"]
@@ -319,12 +379,14 @@ if __name__ == "__main__":
             starts = get_valid_start_periods_for_day("MONDAY", is_eve, dur, schema)
             print(f"  {stream_label:9s} | duration={dur} -> {starts}")
 
-    # Build strict primary domains first (no fallback venues)
-    domains_primary = build_domains(sessions, venues, schema, include_fallback_venues=False)
+    # Build strict primary domains with departmental affinity config active
+    domains_primary = build_domains(
+        sessions, venues, schema, include_fallback_venues=False, affinity_config=affinity_cfg
+    )
     wipeouts = [sid for sid, dom in domains_primary.items() if len(dom) == 0]
     sizes = [len(dom) for dom in domains_primary.values()]
 
-    print(f"\n=== 2. Domain Generation Summary (Primary Venues Only) ===")
+    print(f"\n=== 2. Domain Generation Summary (Affinity Sub-Pools Active) ===")
     print(f"  Total variables (|X|) : {len(domains_primary)}")
     print(f"  Domain wipeouts (|D|=0): {len(wipeouts)}")
     print(f"  Min |D_i|              : {min(sizes)}")
@@ -338,7 +400,9 @@ if __name__ == "__main__":
             gt_hits += 1
     print(f"  Ground-truth in domain : {gt_hits} / {len(sessions)}")
 
-    preflight = run_preflight_checks(sessions, venues, schema, include_fallback_venues=False)
+    preflight = run_preflight_checks(
+        sessions, venues, schema, include_fallback_venues=False, affinity_config=affinity_cfg
+    )
     print(f"\n=== 3. Preflight Pigeonhole Capacity Checks ===")
     print(f"  Overall Passed         : {preflight['passed']}")
     print(f"  1. Lecturer Check      : {'PASS' if preflight['lecturer_check']['passed'] else 'FAIL'} "
@@ -351,3 +415,5 @@ if __name__ == "__main__":
           f"(violations={len(preflight['venue_category_check']['violations'])})")
     for u in preflight["venue_category_check"]["utilization"]:
         print(f"       -> {u['category']:26s} [{u['stream']:9s}]: {u['demand_periods']:4d} / {u['capacity_periods']:4d}p ({u['utilization']*100:5.1f}%)")
+    print(f"  4. Dept Sub-Pool Check : {'PASS' if preflight['subpool_check']['passed'] else 'FAIL'} "
+          f"(violations={len(preflight['subpool_check']['violations'])})")

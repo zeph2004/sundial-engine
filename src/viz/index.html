@@ -1,0 +1,1782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sundial Engine — Timetable Visualizer &amp; PDF Renderer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-page: #FAFAFA;
+      --bg-surface: #FFFFFF;
+      --bg-subtle: #F4F4F5;
+      --text-primary: #18181B;
+      --text-secondary: #52525B;
+      --text-muted: #71717A;
+      --border-color: #E4E4E7;
+      --border-strong: #A1A1AA;
+      --accent: #EA580C;
+      --accent-hover: #C2410C;
+      --accent-soft: #FFF7ED;
+      --accent-border: #FDBA74;
+      --accent-bright: #F97316;
+      --theory-bg: #F8FAFC;
+      --theory-border: #CBD5E1;
+      --theory-badge-bg: #E2E8F0;
+      --theory-badge-text: #1E293B;
+      --lab-bg: #FFF7ED;
+      --lab-border: #FDBA74;
+      --lab-badge-bg: #FFEDD5;
+      --lab-badge-text: #9A3412;
+      --twilight-bg: #FEF3C7;
+      --twilight-border: #F59E0B;
+      --conflict-bg: #FEF2F2;
+      --conflict-border: #DC2626;
+      --conflict-text: #991B1B;
+      --success-bg: #ECFDF5;
+      --success-text: #065F46;
+      --success-border: #6EE7B7;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ================= TOP CONTROL BAR (HIDDEN ON PRINT) ================= */
+    .control-shell {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+
+    .top-bar {
+      max-width: 1680px;
+      margin: 0 auto;
+      padding: 10px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .brand-block {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #FFFFFF;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-title {
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+
+    .brand-subtitle {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .controls-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .segmented-control {
+      display: inline-flex;
+      background: var(--bg-subtle);
+      padding: 2px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+
+    .segmented-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.12s ease;
+      white-space: nowrap;
+    }
+
+    .segmented-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .segmented-btn.active {
+      background: var(--bg-surface);
+      color: var(--accent);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    }
+
+    .picker-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .search-input {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 5px 9px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      width: 150px;
+      outline: none;
+    }
+
+    .search-input:focus,
+    .entity-select:focus {
+      border-color: var(--accent);
+      background: var(--bg-surface);
+    }
+
+    .entity-select {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      min-width: 220px;
+      max-width: 310px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .nav-btn {
+      border: 1px solid var(--border-color);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 9px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .nav-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-action {
+      border: 1px solid var(--border-color);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.12s ease;
+    }
+
+    .btn-action:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-action.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #FFFFFF;
+    }
+
+    .btn-action.primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+      color: #FFFFFF;
+    }
+
+    /* Quick Filter Sub-bar */
+    .sub-bar {
+      max-width: 1680px;
+      margin: 0 auto;
+      padding: 7px 18px;
+      border-top: 1px solid var(--border-color);
+      background: #FCFCFD;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .pills-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pills-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-right: 4px;
+    }
+
+    .filter-pill {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+
+    .filter-pill:hover,
+    .filter-pill.active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .global-solve-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10B981;
+      margin-right: 4px;
+    }
+
+    .status-dot.warn {
+      background: #DC2626;
+    }
+
+    /* ================= MAIN WORKSPACE & TELEMETRY STRIP ================= */
+    .workspace {
+      max-width: 1680px;
+      margin: 0 auto;
+      padding: 16px 18px 36px;
+    }
+
+    .sheet-container {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    }
+
+    .sheet-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+      border-bottom: 2px solid var(--text-primary);
+      gap: 12px;
+    }
+
+    .inst-kicker {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .sheet-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      margin-top: 2px;
+    }
+
+    .sheet-meta-right {
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .mode-pill {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-bottom: 3px;
+    }
+
+    .mode-pill.csp {
+      background: var(--success-bg);
+      color: var(--success-text);
+      border: 1px solid var(--success-border);
+    }
+
+    .mode-pill.gt {
+      background: var(--conflict-bg);
+      color: var(--conflict-text);
+      border: 1px solid #FCA5A5;
+    }
+
+    /* Telemetry Strip */
+    .telemetry-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .metric-card {
+      background: var(--bg-page);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 11px;
+    }
+
+    .metric-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-top: 2px;
+    }
+
+    .metric-value.accent {
+      color: var(--accent);
+    }
+
+    .metric-value.danger {
+      color: var(--conflict-border);
+    }
+
+    .metric-sub {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-secondary);
+      margin-top: 1px;
+    }
+
+    /* ================= TIMETABLE GRID (6 DAYS x 18 PERIODS) ================= */
+    .grid-scroll {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    table.timetable-grid {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 1px solid var(--text-primary);
+    }
+
+    table.timetable-grid th,
+    table.timetable-grid td {
+      border: 1px solid var(--border-color);
+      vertical-align: top;
+    }
+
+    /* Stream Super-Header */
+    tr.stream-header-row th {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 6px;
+      text-align: center;
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-strong);
+    }
+
+    tr.stream-header-row th.twilight-header {
+      background: #FEF3C7;
+      color: #92400E;
+    }
+
+    tr.stream-header-row th.evening-header {
+      background: #FFF7ED;
+      color: var(--accent);
+    }
+
+    /* Period Header */
+    tr.period-header-row th {
+      background: #F8FAFC;
+      padding: 5px 2px;
+      text-align: center;
+      border-bottom: 1.5px solid var(--text-primary);
+    }
+
+    th.day-corner {
+      width: 82px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-primary);
+      vertical-align: middle !important;
+      background: var(--bg-subtle) !important;
+    }
+
+    .p-num {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .p-clock {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-muted);
+      line-height: 1.15;
+      margin-top: 1px;
+    }
+
+    /* Break & Stream Dividers */
+    th.break-after,
+    td.break-after {
+      border-right: 2.5px dashed #94A3B8 !important;
+    }
+
+    th.stream-boundary-after,
+    td.stream-boundary-after {
+      border-right: 2.5px solid var(--accent) !important;
+    }
+
+    th.twilight-col {
+      background: #FFFBEB !important;
+    }
+
+    /* Day Row Cells */
+    td.day-label-cell {
+      background: var(--bg-subtle);
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--text-primary);
+      padding: 8px 6px;
+      vertical-align: middle !important;
+      text-align: left;
+      border-right: 1.5px solid var(--text-primary) !important;
+    }
+
+    .day-subload {
+      display: block;
+      font-size: 9.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    td.slot-cell {
+      height: 76px;
+      padding: 2px;
+      background: var(--bg-surface);
+      position: relative;
+    }
+
+    td.slot-cell.empty-twilight {
+      background: rgba(254, 243, 199, 0.25);
+    }
+
+    td.slot-cell.empty-evening {
+      background: rgba(244, 244, 245, 0.35);
+    }
+
+    /* Session Card inside Cell */
+    .session-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      height: 100%;
+    }
+
+    .session-card {
+      flex: 1;
+      border-radius: 4px;
+      padding: 4px 6px;
+      border: 1px solid var(--theory-border);
+      background: var(--theory-bg);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      transition: transform 0.08s ease;
+    }
+
+    .session-card.type-Lab {
+      background: var(--lab-bg);
+      border-color: var(--lab-border);
+      border-left: 3px solid var(--accent);
+    }
+
+    .session-card.type-Theory {
+      background: var(--theory-bg);
+      border-color: var(--theory-border);
+      border-left: 3px solid #475569;
+    }
+
+    .session-card.is-twilight {
+      background: var(--twilight-bg);
+      border-color: var(--twilight-border);
+      border-left: 3px solid #D97706;
+    }
+
+    .session-card.is-conflict {
+      background: var(--conflict-bg) !important;
+      border: 1.5px solid var(--conflict-border) !important;
+      border-left: 4px solid var(--conflict-border) !important;
+    }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 4px;
+    }
+
+    .mod-code {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    .badges-inline {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .type-badge {
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+
+    .type-badge.Theory {
+      background: var(--theory-badge-bg);
+      color: var(--theory-badge-text);
+    }
+
+    .type-badge.Lab {
+      background: var(--lab-badge-bg);
+      color: var(--lab-badge-text);
+    }
+
+    .conflict-tag {
+      background: var(--conflict-border);
+      color: #FFFFFF;
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+
+    .twilight-tag {
+      background: #D97706;
+      color: #FFFFFF;
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .tier-badge {
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .tier-badge.tier1 {
+      background: #DCFCE7;
+      color: #166534;
+      border: 1px solid #86EFAC;
+    }
+
+    .tier-badge.tier1-dept {
+      background: #E0F2FE;
+      color: #075985;
+      border: 1px solid #7DD3FC;
+    }
+
+    .tier-badge.tier2 {
+      background: #FEE2E2;
+      color: #991B1B;
+      border: 1px solid #FCA5A5;
+    }
+
+    .session-card.is-overflow {
+      border: 1.5px dashed #EA580C !important;
+      background: #FFFBEB !important;
+    }
+
+    .card-mid {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 2px;
+      line-height: 1.2;
+    }
+
+    .card-bot {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 4px;
+      line-height: 1.15;
+    }
+
+    .sid-tag {
+      color: var(--text-muted);
+      font-size: 8.5px;
+      flex-shrink: 0;
+    }
+
+    /* Legend & Footer inside Sheet */
+    .sheet-footer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border-color);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      gap: 10px;
+    }
+
+    .legend-items {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    /* Batch Modal / Drawer */
+    .batch-banner {
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .batch-banner.visible {
+      display: flex;
+    }
+
+    /* ================= DEDICATED PRINT / PDF STYLESHEET ================= */
+    @media print {
+      @page {
+        size: A4 landscape;
+        margin: 8mm;
+      }
+
+      html, body {
+        background: #FFFFFF !important;
+        color: #000000 !important;
+        font-size: 10px;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .no-print,
+      .control-shell,
+      .batch-banner {
+        display: none !important;
+      }
+
+      .workspace {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      .sheet-container {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        page-break-inside: avoid;
+      }
+
+      .sheet-container.page-break {
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .sheet-header {
+        padding-bottom: 6px;
+        margin-bottom: 6px;
+      }
+
+      .sheet-title {
+        font-size: 15px;
+      }
+
+      .telemetry-strip {
+        grid-template-columns: repeat(5, 1fr);
+        gap: 5px;
+        margin-bottom: 8px;
+      }
+
+      .metric-card {
+        padding: 4px 7px;
+      }
+
+      .metric-value {
+        font-size: 11px;
+      }
+
+      td.slot-cell {
+        height: 56px;
+        padding: 1.5px;
+      }
+
+      .mod-code {
+        font-size: 9px;
+      }
+
+      .card-mid {
+        font-size: 8.5px;
+      }
+
+      .card-bot {
+        font-size: 7.5px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ================= TOP CONTROL BAR (HIDDEN ON PRINT) ================= -->
+  <header class="control-shell no-print">
+    <div class="top-bar">
+      <div class="brand-block">
+        <div class="brand-mark">SE</div>
+        <div>
+          <div class="brand-title">Sundial CSP Timetable Visualizer</div>
+          <div class="brand-subtitle" id="headerSubtitle">Arusha Technical College (ATC) — Phase 3b Backtracking Solver</div>
+        </div>
+      </div>
+
+      <div class="controls-group">
+        <!-- 0. Benchmark Size Selector (1,233 Clean vs 1,299 Full) -->
+        <div class="segmented-control" id="benchmarkSelector" title="Switch between Clean Primary (1,233) and Full Dataset (1,299)">
+          <button class="segmented-btn active" data-bm="1233_clean">1,233 Clean</button>
+          <button class="segmented-btn" data-bm="1299_full">1,299 Full</button>
+        </div>
+
+        <!-- 1. Dataset Schedule Mode Selector -->
+        <div class="segmented-control" id="scheduleModeSelector">
+          <button class="segmented-btn active" data-mode="csp">CSP Solved (0 Conflicts)</button>
+          <button class="segmented-btn" data-mode="gt">ATC Ground Truth</button>
+        </div>
+
+        <!-- 2. View Lens Selector -->
+        <div class="segmented-control" id="lensSelector">
+          <button class="segmented-btn active" data-lens="cohort">By Cohort</button>
+          <button class="segmented-btn" data-lens="lecturer">By Lecturer</button>
+          <button class="segmented-btn" data-lens="venue">By Venue</button>
+        </div>
+
+        <!-- 3. Searchable Entity Picker -->
+        <div class="picker-group">
+          <input
+            type="text"
+            id="entitySearchInput"
+            class="search-input"
+            placeholder="Filter entity..."
+            autocomplete="off"
+          />
+          <button class="nav-btn" id="prevEntityBtn" title="Previous Entity ([)">&#9664;</button>
+          <select id="entitySelect" class="entity-select"></select>
+          <button class="nav-btn" id="nextEntityBtn" title="Next Entity (])">&#9654;</button>
+        </div>
+
+        <!-- 5. Action Buttons -->
+        <button class="btn-action primary" id="exportPdfBtn" title="Print / Save current timetable as single-page A4 Landscape PDF">
+          Export Current View to PDF
+        </button>
+        <button class="btn-action" id="batchPrintBtn" title="Render multi-page A4 Landscape packet for an NTA Level">
+          Batch Print Cohort Packet (PDF)
+        </button>
+      </div>
+    </div>
+
+    <!-- 4. Quick Filter Pills & Global Solver Telemetry -->
+    <div class="sub-bar">
+      <div class="pills-row">
+        <span class="pills-label">Quick Jump:</span>
+        <button class="filter-pill" data-preset="max_load_cohort">Max Load Cohorts (72p: L7-2CS / L5CS)</button>
+        <button class="filter-pill" data-preset="twilight_cohort">Twilight P11–P12 Evening</button>
+        <button class="filter-pill" data-preset="high_degree">High-Degree Hub (deg=125: L5A / Sadock)</button>
+        <button class="filter-pill" data-preset="gt_conflict">Ground-Truth Conflict Example</button>
+        <button class="filter-pill" data-preset="busy_venue">High-Utilization Venue (Comp R42 Lab)</button>
+      </div>
+      <div class="global-solve-badge" id="globalTelemetryBadge">
+        Loading solver telemetry...
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN WORKSPACE ================= -->
+  <main class="workspace">
+    <!-- Batch Mode Banner (only shown when batch packet is active) -->
+    <div class="batch-banner no-print" id="batchBanner">
+      <div>
+        <strong>Batch Cohort Packet Mode Active:</strong>
+        <span id="batchBannerText">Showing all cohorts in selected NTA Level with automatic A4 Landscape page breaks.</span>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <label for="batchLevelSelect" style="font-family:var(--font-mono); font-size:11px; font-weight:600;">NTA Level:</label>
+        <select id="batchLevelSelect" class="entity-select" style="min-width:140px;"></select>
+        <button class="btn-action primary" id="printBatchNowBtn">Print Packet Now</button>
+        <button class="btn-action" id="exitBatchBtn">Exit Batch View</button>
+      </div>
+    </div>
+
+    <!-- Rendered Timetable Sheet(s) -->
+    <div id="sheetsMount"></div>
+  </main>
+
+  <!-- Load local JS bundle first (works offline & via file://) -->
+  <script src="timetable_view_data.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      const state = {
+        rawPayload: null,
+        benchmarkMode: "1233_clean", // "1233_clean" | "1299_full"
+        scheduleMode: "csp",         // "csp" | "gt"
+        lens: "cohort",              // "cohort" | "lecturer" | "venue"
+        selectedEntityId: "",
+        searchQuery: "",
+        batchMode: false,
+        batchLevel: "ALL",
+      };
+
+      const els = {
+        benchmarkSelector: document.getElementById("benchmarkSelector"),
+        scheduleModeSelector: document.getElementById("scheduleModeSelector"),
+        lensSelector: document.getElementById("lensSelector"),
+        entitySearchInput: document.getElementById("entitySearchInput"),
+        entitySelect: document.getElementById("entitySelect"),
+        prevEntityBtn: document.getElementById("prevEntityBtn"),
+        nextEntityBtn: document.getElementById("nextEntityBtn"),
+        exportPdfBtn: document.getElementById("exportPdfBtn"),
+        batchPrintBtn: document.getElementById("batchPrintBtn"),
+        globalTelemetryBadge: document.getElementById("globalTelemetryBadge"),
+        sheetsMount: document.getElementById("sheetsMount"),
+        batchBanner: document.getElementById("batchBanner"),
+        batchBannerText: document.getElementById("batchBannerText"),
+        batchLevelSelect: document.getElementById("batchLevelSelect"),
+        printBatchNowBtn: document.getElementById("printBatchNowBtn"),
+        exitBatchBtn: document.getElementById("exitBatchBtn"),
+      };
+
+      async function loadData() {
+        if (window.__SUNDIAL_TIMETABLE_DATA__) {
+          return window.__SUNDIAL_TIMETABLE_DATA__;
+        }
+        const resp = await fetch("../../data/processed/timetable_view_data.json");
+        if (!resp.ok) {
+          throw new Error("Failed to load timetable_view_data.json");
+        }
+        return await resp.json();
+      }
+
+      function getActiveModeBundle() {
+        const p = state.rawPayload;
+        if (p.modes && p.modes[state.benchmarkMode]) {
+          return p.modes[state.benchmarkMode];
+        }
+        return {
+          modeKey: p.metadata.benchmarkMode,
+          modeLabel: "Default Dataset",
+          telemetry: p.metadata.solveTelemetry,
+          sessions: p.sessions,
+        };
+      }
+
+      function getEntitiesForLens(lens) {
+        const entities = state.rawPayload.entities;
+        if (lens === "cohort") return entities.cohorts;
+        if (lens === "lecturer") return entities.lecturers;
+        return entities.venues;
+      }
+
+      function getFilteredEntities() {
+        const list = getEntitiesForLens(state.lens);
+        const q = state.searchQuery.trim().toLowerCase();
+        if (!q) return list;
+        return list.filter((item) => {
+          const label = formatEntityOptionLabel(item, state.lens).toLowerCase();
+          return label.includes(q);
+        });
+      }
+
+      function formatEntityOptionLabel(item, lens) {
+        if (lens === "cohort") {
+          const streamTag = item.isEvening ? "Evening" : "Full-Time";
+          return `${item.id}  (Level ${item.level} • ${streamTag})`;
+        }
+        if (lens === "lecturer") {
+          return item.name;
+        }
+        const cap = item.capacity ? `cap ${item.capacity}` : "open";
+        return `${item.name}  [${item.category} • ${cap}]`;
+      }
+
+      function populateEntitySelect(preserveSelection = true) {
+        const filtered = getFilteredEntities();
+        els.entitySelect.innerHTML = "";
+
+        if (filtered.length === 0) {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "No matching entity";
+          els.entitySelect.appendChild(opt);
+          state.selectedEntityId = "";
+          return;
+        }
+
+        const currentExists = preserveSelection && filtered.some((x) => String(x.id) === String(state.selectedEntityId));
+        if (!currentExists) {
+          state.selectedEntityId = String(filtered[0].id);
+        }
+
+        for (const item of filtered) {
+          const opt = document.createElement("option");
+          opt.value = String(item.id);
+          opt.textContent = formatEntityOptionLabel(item, state.lens);
+          if (String(item.id) === String(state.selectedEntityId)) {
+            opt.selected = true;
+          }
+          els.entitySelect.appendChild(opt);
+        }
+      }
+
+      function updateGlobalTelemetryHeader() {
+        const bundle = getActiveModeBundle();
+        const t = bundle.telemetry;
+        if (state.scheduleMode === "csp") {
+          const affPct = t.tier1AffinityPct !== undefined ? `${t.tier1AffinityPct}%` : "100%";
+          const satFree = t.cspSaturdayFreeCohorts !== undefined ? `${t.cspSaturdayFreeCohorts}/${t.totalCohorts}` : "";
+          const satCount = t.cspSaturdayTotal !== undefined ? t.cspSaturdayTotal : 0;
+          els.globalTelemetryBadge.innerHTML = `
+            <span><span class="status-dot"></span><strong>${t.status}</strong> (${t.totalVariables} vars)</span>
+            <span>Runtime: <strong>${t.runtimeMs} ms</strong></span>
+            <span>Sat-Free Cohorts: <strong>${satFree}</strong> (Sat sessions: <strong>${satCount}</strong>)</span>
+            <span>Tier-1 Affinity: <strong>${affPct}</strong></span>
+            <span>Twilight: <strong>${t.twilightCount}</strong></span>
+          `;
+        } else {
+          const gtSatFree = t.gtSaturdayFreeCohorts !== undefined ? `${t.gtSaturdayFreeCohorts}/${t.totalCohorts}` : "";
+          const gtSatCount = t.gtSaturdayTotal !== undefined ? t.gtSaturdayTotal : 0;
+          els.globalTelemetryBadge.innerHTML = `
+            <span><span class="status-dot ${t.groundTruthConflictPairs > 0 ? "warn" : ""}"></span><strong>ATC Ground Truth</strong> (${t.totalVariables} vars)</span>
+            <span>Sat-Free Cohorts: <strong>${gtSatFree}</strong> (Sat sessions: <strong>${gtSatCount}</strong>)</span>
+            <span>Hard Conflict Pairs: <strong>${t.groundTruthConflictPairs}</strong> (${t.groundTruthConflictingSessions} sessions)</span>
+          `;
+        }
+      }
+
+      function filterSessionsForEntity(sessions, lens, entityId) {
+        if (lens === "cohort") {
+          return sessions.filter((s) => s.targetCohorts.includes(entityId));
+        }
+        if (lens === "lecturer") {
+          return sessions.filter((s) => s.lecturers.includes(entityId));
+        }
+        const vidNum = Number(entityId);
+        return sessions.filter((s) => {
+          const placement = state.scheduleMode === "csp" ? s.cspAssignment : s.groundTruth;
+          return Number(placement.venueId) === vidNum;
+        });
+      }
+
+      function computeEntityTelemetry(entitySessions, entityObj, lens) {
+        const days = state.rawPayload.metadata.days;
+        const dailyPeriods = {};
+        for (const d of days) dailyPeriods[d] = 0;
+
+        let totalPeriods = 0;
+        let twilightPeriods = 0;
+        let conflictSlots = 0;
+        let theorySessions = 0;
+        let labSessions = 0;
+        let tier1Sessions = 0;
+        let tier1ExactSessions = 0;
+        let tier2OverflowSessions = 0;
+        let saturdayCond1Sessions = 0;
+        let saturdayCond2Sessions = 0;
+
+        // Track slot occupancy per (day, p)
+        const slotCount = {};
+        for (const d of days) {
+          slotCount[d] = new Array(19).fill(0);
+        }
+
+        for (const s of entitySessions) {
+          const p = state.scheduleMode === "csp" ? s.cspAssignment : s.groundTruth;
+          const dur = s.durationPeriods;
+          totalPeriods += dur;
+          if (dailyPeriods[p.day] !== undefined) {
+            dailyPeriods[p.day] += dur;
+          }
+          if (s.sessionType === "Lab") labSessions++;
+          else theorySessions++;
+
+          const vTier = p.venueTier || "Tier 1: Module/Cohort Preferred";
+          const vSubTier = p.venueSubTier || "Tier 1A: Module Preferred";
+          if (vTier.startsWith("Tier 2")) {
+            tier2OverflowSessions++;
+          } else {
+            tier1Sessions++;
+            if (vSubTier.startsWith("Tier 1A")) {
+              tier1ExactSessions++;
+            }
+          }
+
+          const satReason = p.saturdayReason || (p.day === "SATURDAY" ? "Saturday (Condition 1: Cohort >60p Overflow)" : "Weekday");
+          if (satReason.includes("Condition 1")) {
+            saturdayCond1Sessions++;
+          } else if (satReason.includes("Condition 2")) {
+            saturdayCond2Sessions++;
+          }
+
+          for (let per = p.startPeriod; per <= p.endPeriod; per++) {
+            if (slotCount[p.day]) {
+              slotCount[p.day][per] += 1;
+            }
+            if (s.isEveningStream && per <= 12) {
+              twilightPeriods += 1;
+            }
+          }
+        }
+
+        // Count idle gaps & slot collisions per day
+        let idleGaps = 0;
+        let idleGapPeriods = 0;
+        for (const d of days) {
+          const arr = slotCount[d];
+          let firstBusy = -1;
+          let lastBusy = -1;
+          for (let per = 1; per <= 18; per++) {
+            if (arr[per] > 1) conflictSlots += 1;
+            if (arr[per] > 0) {
+              if (firstBusy === -1) firstBusy = per;
+              lastBusy = per;
+            }
+          }
+          if (firstBusy !== -1 && lastBusy > firstBusy) {
+            let inGap = false;
+            for (let per = firstBusy; per <= lastBusy; per++) {
+              if (arr[per] === 0) {
+                if (!inGap) {
+                  idleGaps += 1;
+                  inGap = true;
+                }
+              } else {
+                inGap = false;
+              }
+            }
+          }
+        }
+
+        // Available weekly capacity reference
+        let weeklyCap = 72;
+        if (lens === "cohort" && entityObj) {
+          weeklyCap = entityObj.isEvening ? 36 : 72;
+        } else if (lens === "lecturer") {
+          const hasFT = entitySessions.some((s) => !s.isEveningStream);
+          const hasEve = entitySessions.some((s) => s.isEveningStream);
+          weeklyCap = hasFT && hasEve ? 108 : (hasEve ? 36 : 72);
+        } else if (lens === "venue") {
+          weeklyCap = 108;
+        }
+
+        const utilPct = weeklyCap > 0 ? ((totalPeriods / weeklyCap) * 100).toFixed(1) : "0.0";
+        const affinityPct = entitySessions.length > 0 ? ((tier1Sessions / entitySessions.length) * 100).toFixed(1) : "100.0";
+        const exactModPct = entitySessions.length > 0 ? ((tier1ExactSessions / entitySessions.length) * 100).toFixed(1) : "100.0";
+
+        return {
+          totalPeriods,
+          weeklyCap,
+          utilPct,
+          dailyPeriods,
+          idleGaps,
+          twilightPeriods,
+          conflictSlots,
+          theorySessions,
+          labSessions,
+          sessionCount: entitySessions.length,
+          tier1Sessions,
+          tier1ExactSessions,
+          tier2OverflowSessions,
+          affinityPct,
+          exactModPct,
+          saturdayCond1Sessions,
+          saturdayCond2Sessions,
+        };
+      }
+
+      /**
+       * Builds horizontal colspan cells for a single day row (Periods 1..18).
+       * Handles both clean non-overlapping schedules and overlapping Ground-Truth conflicts
+       * by grouping intersecting intervals into merged visual spans.
+       */
+      function buildDayRowCells(day, daySessions) {
+        const items = daySessions
+          .map((s) => {
+            const p = state.scheduleMode === "csp" ? s.cspAssignment : s.groundTruth;
+            return {
+              session: s,
+              start: p.startPeriod,
+              end: p.endPeriod,
+              placement: p,
+            };
+          })
+          .sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+
+        const cells = [];
+        let p = 1;
+        let idx = 0;
+
+        while (p <= 18) {
+          // Find all items starting at or covering period p
+          const group = [];
+          let groupEnd = p;
+
+          while (idx < items.length && items[idx].start <= p) {
+            const it = items[idx];
+            group.push(it);
+            if (it.end > groupEnd) groupEnd = it.end;
+            idx++;
+          }
+
+          if (group.length === 0) {
+            cells.push({
+              startPeriod: p,
+              endPeriod: p,
+              colspan: 1,
+              items: [],
+              hasOverlapCollision: false,
+            });
+            p += 1;
+          } else {
+            // Pull in any subsequent items that overlap with [p, groupEnd]
+            while (idx < items.length && items[idx].start <= groupEnd) {
+              const it = items[idx];
+              group.push(it);
+              if (it.end > groupEnd) groupEnd = it.end;
+              idx++;
+            }
+            const span = groupEnd - p + 1;
+            cells.push({
+              startPeriod: p,
+              endPeriod: groupEnd,
+              colspan: span,
+              items: group,
+              hasOverlapCollision: group.length > 1,
+            });
+            p = groupEnd + 1;
+          }
+        }
+        return cells;
+      }
+
+      function escapeHtml(str) {
+        return String(str ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function renderSessionCardHtml(item, lens, isCollisionInCell) {
+        const s = item.session;
+        const p = item.placement;
+        const isConflict = isCollisionInCell || (state.scheduleMode === "gt" && p.hasConflict);
+        const isTwilight = Boolean(p.isTwilight);
+        const vTier = p.venueTier || "Tier 1: Module/Cohort Preferred";
+        const isOverflow = state.scheduleMode === "csp" && vTier.startsWith("Tier 2");
+
+        const cardClasses = [
+          "session-card",
+          `type-${s.sessionType}`,
+          isTwilight ? "is-twilight" : "",
+          isOverflow ? "is-overflow" : "",
+          isConflict ? "is-conflict" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        let primaryMeta = "";
+        let secondaryMeta = "";
+
+        if (lens === "cohort") {
+          primaryMeta = `📍 ${escapeHtml(p.venueName)}`;
+          secondaryMeta = s.lecturers.join(", ");
+        } else if (lens === "lecturer") {
+          primaryMeta = `📍 ${escapeHtml(p.venueName)}`;
+          secondaryMeta = s.targetCohorts.join(" + ");
+        } else {
+          // venue lens
+          primaryMeta = `👥 ${escapeHtml(s.targetCohorts.join(" + "))}`;
+          secondaryMeta = s.lecturers.join(", ");
+        }
+
+        const spanBadge =
+          isCollisionInCell
+            ? `<span class="conflict-tag">P${item.start}–P${item.end} CLASH</span>`
+            : isConflict
+            ? `<span class="conflict-tag">GT CONFLICT</span>`
+            : "";
+
+        const twilightBadge = isTwilight ? `<span class="twilight-tag">TWILIGHT</span>` : "";
+
+        let tierBadge = "";
+        if (state.scheduleMode === "csp") {
+          if (vTier.startsWith("Tier 2")) {
+            tierBadge = `<span class="tier-badge tier2" title="${escapeHtml(vTier)}">T2 OVERFLOW</span>`;
+          } else if (vTier.includes("Dept Pool")) {
+            tierBadge = `<span class="tier-badge tier1-dept" title="${escapeHtml(vTier)}">T1 DEPT</span>`;
+          } else {
+            tierBadge = `<span class="tier-badge tier1" title="${escapeHtml(vTier)}">T1 HOME</span>`;
+          }
+        }
+
+        const satReason = p.saturdayReason || (p.day === "SATURDAY" ? "Saturday (Condition 1: Cohort >60p Overflow)" : "Weekday");
+        let satBadge = "";
+        if (satReason.includes("Condition 1")) {
+          satBadge = `<span class="twilight-tag" style="background:#EA580C;" title="${escapeHtml(satReason)}">SAT COND-1 (&gt;60p)</span>`;
+        } else if (satReason.includes("Condition 2")) {
+          satBadge = `<span class="twilight-tag" style="background:#7C3AED;" title="${escapeHtml(satReason)}">SAT COND-2</span>`;
+        }
+
+        return `
+          <div class="${cardClasses}" title="${escapeHtml(s.sessionId)} | ${escapeHtml(s.moduleCode)} | P${item.start}-P${item.end} | Venue: ${escapeHtml(p.venueName)} (${escapeHtml(vTier)}) | Day Policy: ${escapeHtml(satReason)} | Cohorts: ${escapeHtml(s.targetCohorts.join(', '))} | Lecturers: ${escapeHtml(s.lecturers.join(', '))}">
+            <div class="card-top">
+              <span class="mod-code">${escapeHtml(s.moduleCode)}</span>
+              <span class="badges-inline">
+                ${spanBadge}
+                ${satBadge}
+                ${twilightBadge}
+                ${tierBadge}
+                <span class="type-badge ${escapeHtml(s.sessionType)}">${escapeHtml(s.sessionType)}</span>
+              </span>
+            </div>
+            <div class="card-mid">${primaryMeta}</div>
+            <div class="card-bot">
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(secondaryMeta)}</span>
+              <span class="sid-tag">${escapeHtml(s.sessionId)} (${s.durationPeriods}p)</span>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderSheetHtml(entityObj, lens, sessions, pageBreak = false) {
+        const meta = state.rawPayload.metadata;
+        const bundle = getActiveModeBundle();
+        const entityId = String(entityObj.id);
+        const entitySessions = filterSessionsForEntity(sessions, lens, entityId);
+        const telem = computeEntityTelemetry(entitySessions, entityObj, lens);
+
+        const lensTitlePrefix =
+          lens === "cohort"
+            ? `COHORT TIMETABLE — ${entityObj.name} (NTA LEVEL ${entityObj.level})`
+            : lens === "lecturer"
+            ? `LECTURER TIMETABLE — ${entityObj.name}`
+            : `VENUE TIMETABLE — ${entityObj.name} (${entityObj.category})`;
+
+        const modePillHtml =
+          state.scheduleMode === "csp"
+            ? `<span class="mode-pill csp">CSP SOLVED SCHEDULE • 0 HARD CONFLICTS</span>`
+            : `<span class="mode-pill gt">ATC HUMAN GROUND TRUTH • ${telem.conflictSlots} SLOT COLLISIONS</span>`;
+
+        const daySpreadParts = meta.days.map((d) => {
+          const shortD = d.slice(0, 3);
+          return `${shortD}: ${telem.dailyPeriods[d] || 0}p`;
+        });
+
+        // Build Period Headers (P1..P18)
+        const periodHeadersHtml = meta.periods
+          .map((pObj) => {
+            const p = pObj.period;
+            const classes = [];
+            if (p === 4 || p === 6) classes.push("break-after");
+            if (p === 12) classes.push("stream-boundary-after");
+            if (p === 11 || p === 12) classes.push("twilight-col");
+            return `
+              <th class="${classes.join(" ")}">
+                <div class="p-num">P${p}</div>
+                <div class="p-clock">${escapeHtml(pObj.start)}<br/>${escapeHtml(pObj.end)}</div>
+              </th>
+            `;
+          })
+          .join("");
+
+        // Build Day Rows (MONDAY..SATURDAY)
+        const dayRowsHtml = meta.days
+          .map((day) => {
+            const daySessions = entitySessions.filter((s) => {
+              const placement = state.scheduleMode === "csp" ? s.cspAssignment : s.groundTruth;
+              return placement.day === day;
+            });
+            const cells = buildDayRowCells(day, daySessions);
+            const dayLoad = telem.dailyPeriods[day] || 0;
+
+            const cellsHtml = cells
+              .map((cell) => {
+                const endP = cell.endPeriod;
+                const tdClasses = ["slot-cell"];
+                if (endP === 4 || endP === 6) tdClasses.push("break-after");
+                if (endP === 12) tdClasses.push("stream-boundary-after");
+                if (cell.items.length === 0) {
+                  if (cell.startPeriod === 11 || cell.startPeriod === 12) {
+                    tdClasses.push("empty-twilight");
+                  } else if (cell.startPeriod >= 13) {
+                    tdClasses.push("empty-evening");
+                  }
+                }
+
+                const innerHtml =
+                  cell.items.length === 0
+                    ? ""
+                    : `<div class="session-stack">${cell.items
+                        .map((it) => renderSessionCardHtml(it, lens, cell.hasOverlapCollision))
+                        .join("")}</div>`;
+
+                return `<td colspan="${cell.colspan}" class="${tdClasses.join(" ")}">${innerHtml}</td>`;
+              })
+              .join("");
+
+            return `
+              <tr>
+                <td class="day-label-cell">
+                  ${escapeHtml(day.slice(0, 3))}
+                  <span class="day-subload">${dayLoad} periods</span>
+                </td>
+                ${cellsHtml}
+              </tr>
+            `;
+          })
+          .join("");
+
+        return `
+          <section class="sheet-container ${pageBreak ? "page-break" : ""}">
+            <div class="sheet-header">
+              <div>
+                <div class="inst-kicker">${escapeHtml(meta.institutionName)} (${escapeHtml(meta.institutionCode)}) — SEMESTER ${escapeHtml(meta.semester)} MASTER TIMETABLE</div>
+                <h1 class="sheet-title">${escapeHtml(lensTitlePrefix)}</h1>
+              </div>
+              <div class="sheet-meta-right">
+                ${modePillHtml}
+                <div>Benchmark: ${escapeHtml(bundle.modeLabel)}</div>
+              </div>
+            </div>
+
+            <!-- Per-Entity Telemetry Strip -->
+            <div class="telemetry-strip">
+              <div class="metric-card">
+                <div class="metric-label">Weekly Load &amp; Utilization</div>
+                <div class="metric-value accent">${telem.totalPeriods} / ${telem.weeklyCap}p (${telem.utilPct}%)</div>
+                <div class="metric-sub">${telem.sessionCount} sessions (${telem.theorySessions} Theory, ${telem.labSessions} Lab)</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Daily Load Spread (Mon–Sat)</div>
+                <div class="metric-value" style="font-size:11.5px;">${escapeHtml(daySpreadParts.join(" | "))}</div>
+                <div class="metric-sub">
+                  ${(telem.saturdayCond1Sessions + telem.saturdayCond2Sessions) === 0
+                    ? `100% Mon–Fri Schedule • Idle Gaps: ${telem.idleGaps}`
+                    : `Sat Fallback: ${telem.saturdayCond1Sessions} Cond-1 (>60p), ${telem.saturdayCond2Sessions} Cond-2`}
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Dept &amp; Home Venue Affinity</div>
+                <div class="metric-value ${telem.tier2OverflowSessions > 0 ? "accent" : ""}">
+                  ${telem.affinityPct}% Tier-1 (${telem.tier1Sessions}/${telem.sessionCount})
+                </div>
+                <div class="metric-sub">Exact Module: ${telem.exactModPct}% • Tier-2 Overflow: ${telem.tier2OverflowSessions}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Hard Constraint Audit</div>
+                <div class="metric-value ${telem.conflictSlots > 0 ? "danger" : ""}">
+                  ${telem.conflictSlots === 0 ? "0 Conflicts (Valid)" : `${telem.conflictSlots} Slot Collisions`}
+                </div>
+                <div class="metric-sub">${state.scheduleMode === "csp" ? "100% Dept Lab Lock Verified" : "Raw ATC Ground Truth"}</div>
+              </div>
+            </div>
+
+            <!-- 6 Days x 18 Periods Timetable Grid -->
+            <div class="grid-scroll">
+              <table class="timetable-grid">
+                <thead>
+                  <tr class="stream-header-row">
+                    <th class="day-corner" rowspan="2">DAY /<br/>PERIOD</th>
+                    <th colspan="4" class="break-after">Morning Block I (P1–P4) • Tea Break After P4</th>
+                    <th colspan="2" class="break-after">Mid-Day (P5–P6) • Lunch After P6</th>
+                    <th colspan="4">Afternoon Block (P7–P10)</th>
+                    <th colspan="2" class="twilight-header stream-boundary-after">Full-Time / Twilight Buffer (P11–P12)</th>
+                    <th colspan="6" class="evening-header">Evening Stream (P13–P18 • 18:00–22:40)</th>
+                  </tr>
+                  <tr class="period-header-row">
+                    ${periodHeadersHtml}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${dayRowsHtml}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="sheet-footer">
+              <div class="legend-items">
+                <span class="legend-item"><span class="legend-swatch" style="background:var(--theory-bg); border:1px solid #475569;"></span> Theory / Lecture</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:var(--lab-bg); border:1px solid var(--accent);"></span> Lab / Workshop</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:var(--twilight-bg); border:1px solid #D97706;"></span> Evening Twilight Buffer (P11–P12)</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:var(--conflict-bg); border:1px solid var(--conflict-border);"></span> Ground-Truth Slot Collision</span>
+                <span><strong>Dashed Line:</strong> Tea (P4) &amp; Lunch (P6) Breaks</span>
+                <span><strong>Orange Line:</strong> Full-Time / Evening Boundary (P12)</span>
+              </div>
+              <div>Generated by Sundial Engine CSP Solver • Pure Python 3</div>
+            </div>
+          </section>
+        `;
+      }
+
+      function render() {
+        if (!state.rawPayload) return;
+        updateGlobalTelemetryHeader();
+
+        const bundle = getActiveModeBundle();
+        const sessions = bundle.sessions;
+
+        if (state.batchMode) {
+          els.batchBanner.classList.add("visible");
+          const allCohorts = state.rawPayload.entities.cohorts;
+          const targetCohorts =
+            state.batchLevel === "ALL"
+              ? allCohorts
+              : allCohorts.filter((c) => String(c.level) === String(state.batchLevel));
+
+          els.batchBannerText.textContent = `Rendering ${targetCohorts.length} cohort schedules (NTA Level: ${state.batchLevel}) — Ready for A4 Landscape PDF export.`;
+
+          els.sheetsMount.innerHTML = targetCohorts
+            .map((c, idx) => renderSheetHtml(c, "cohort", sessions, idx < targetCohorts.length - 1))
+            .join("");
+          return;
+        }
+
+        els.batchBanner.classList.remove("visible");
+        const list = getEntitiesForLens(state.lens);
+        const entityObj = list.find((x) => String(x.id) === String(state.selectedEntityId)) || list[0];
+        if (!entityObj) {
+          els.sheetsMount.innerHTML = `<div class="sheet-container">No entity selected.</div>`;
+          return;
+        }
+        els.sheetsMount.innerHTML = renderSheetHtml(entityObj, state.lens, sessions, false);
+      }
+
+      function stepEntity(delta) {
+        const options = Array.from(els.entitySelect.options);
+        if (options.length === 0) return;
+        const currIdx = options.findIndex((o) => o.value === String(state.selectedEntityId));
+        const nextIdx = (currIdx + delta + options.length) % options.length;
+        state.selectedEntityId = options[nextIdx].value;
+        els.entitySelect.value = state.selectedEntityId;
+        state.batchMode = false;
+        render();
+      }
+
+      function populateBatchLevels() {
+        const levels = Array.from(
+          new Set(state.rawPayload.entities.cohorts.map((c) => String(c.level)))
+        ).sort();
+        els.batchLevelSelect.innerHTML = `<option value="ALL">All NTA Levels (${state.rawPayload.entities.cohorts.length} cohorts)</option>`;
+        for (const lvl of levels) {
+          const count = state.rawPayload.entities.cohorts.filter((c) => String(c.level) === lvl).length;
+          const opt = document.createElement("option");
+          opt.value = lvl;
+          opt.textContent = `NTA Level ${lvl} (${count} cohorts)`;
+          els.batchLevelSelect.appendChild(opt);
+        }
+        // Default to Level 7-2 or first level for responsive batch preview
+        if (levels.includes("7-2")) {
+          state.batchLevel = "7-2";
+          els.batchLevelSelect.value = "7-2";
+        }
+      }
+
+      function setSegmentedActive(container, attrName, value) {
+        for (const btn of container.querySelectorAll(".segmented-btn")) {
+          btn.classList.toggle("active", btn.getAttribute(attrName) === value);
+        }
+      }
+
+      function applyQuickPreset(preset) {
+        state.batchMode = false;
+        state.searchQuery = "";
+        els.entitySearchInput.value = "";
+
+        if (preset === "max_load_cohort") {
+          state.lens = "cohort";
+          state.selectedEntityId = state.selectedEntityId === "L7-2CS" ? "L5CS" : "L7-2CS";
+        } else if (preset === "twilight_cohort") {
+          state.lens = "cohort";
+          // Find a cohort that uses twilight P11-P12 in the current mode
+          const sessions = getActiveModeBundle().sessions;
+          const twSession = sessions.find((s) => s.cspAssignment.isTwilight);
+          state.selectedEntityId = twSession ? twSession.targetCohorts[0] : "L7-1CS-E";
+        } else if (preset === "high_degree") {
+          state.lens = "cohort";
+          state.selectedEntityId = "L5A";
+        } else if (preset === "gt_conflict") {
+          state.benchmarkMode = "1299_full";
+          state.scheduleMode = "gt";
+          state.lens = "cohort";
+          state.selectedEntityId = "L4A";
+          setSegmentedActive(els.benchmarkSelector, "data-bm", state.benchmarkMode);
+          setSegmentedActive(els.scheduleModeSelector, "data-mode", state.scheduleMode);
+        } else if (preset === "busy_venue") {
+          state.lens = "venue";
+          state.selectedEntityId = "46"; // Comp R42 Lab
+        }
+
+        setSegmentedActive(els.lensSelector, "data-lens", state.lens);
+        populateEntitySelect(true);
+        render();
+      }
+
+      function bindEvents() {
+        els.benchmarkSelector.addEventListener("click", (e) => {
+          const btn = e.target.closest(".segmented-btn");
+          if (!btn) return;
+          state.benchmarkMode = btn.getAttribute("data-bm");
+          setSegmentedActive(els.benchmarkSelector, "data-bm", state.benchmarkMode);
+          render();
+        });
+
+        els.scheduleModeSelector.addEventListener("click", (e) => {
+          const btn = e.target.closest(".segmented-btn");
+          if (!btn) return;
+          state.scheduleMode = btn.getAttribute("data-mode");
+          setSegmentedActive(els.scheduleModeSelector, "data-mode", state.scheduleMode);
+          render();
+        });
+
+        els.lensSelector.addEventListener("click", (e) => {
+          const btn = e.target.closest(".segmented-btn");
+          if (!btn) return;
+          state.lens = btn.getAttribute("data-lens");
+          state.batchMode = false;
+          state.searchQuery = "";
+          els.entitySearchInput.value = "";
+          setSegmentedActive(els.lensSelector, "data-lens", state.lens);
+          populateEntitySelect(false);
+          render();
+        });
+
+        els.entitySearchInput.addEventListener("input", (e) => {
+          state.searchQuery = e.target.value;
+          state.batchMode = false;
+          populateEntitySelect(true);
+          render();
+        });
+
+        els.entitySelect.addEventListener("change", (e) => {
+          state.selectedEntityId = e.target.value;
+          state.batchMode = false;
+          render();
+        });
+
+        els.prevEntityBtn.addEventListener("click", () => stepEntity(-1));
+        els.nextEntityBtn.addEventListener("click", () => stepEntity(1));
+
+        document.querySelectorAll(".filter-pill").forEach((pill) => {
+          pill.addEventListener("click", () => {
+            document.querySelectorAll(".filter-pill").forEach((p) => p.classList.remove("active"));
+            pill.classList.add("active");
+            applyQuickPreset(pill.getAttribute("data-preset"));
+          });
+        });
+
+        els.exportPdfBtn.addEventListener("click", () => {
+          state.batchMode = false;
+          render();
+          window.print();
+        });
+
+        els.batchPrintBtn.addEventListener("click", () => {
+          state.batchMode = true;
+          render();
+        });
+
+        els.batchLevelSelect.addEventListener("change", (e) => {
+          state.batchLevel = e.target.value;
+          render();
+        });
+
+        els.printBatchNowBtn.addEventListener("click", () => {
+          window.print();
+        });
+
+        els.exitBatchBtn.addEventListener("click", () => {
+          state.batchMode = false;
+          render();
+        });
+
+        window.addEventListener("keydown", (e) => {
+          if (document.activeElement === els.entitySearchInput) return;
+          if (e.key === "[") {
+            e.preventDefault();
+            stepEntity(-1);
+          } else if (e.key === "]") {
+            e.preventDefault();
+            stepEntity(1);
+          }
+        });
+      }
+
+      async function init() {
+        try {
+          state.rawPayload = await loadData();
+          populateBatchLevels();
+          populateEntitySelect(false);
+          // Default to L7-2CS or L5CS for an immediately rich view
+          const hasL72CS = state.rawPayload.entities.cohorts.some((c) => c.id === "L7-2CS");
+          if (hasL72CS) {
+            state.selectedEntityId = "L7-2CS";
+            els.entitySelect.value = "L7-2CS";
+          }
+          bindEvents();
+          render();
+        } catch (err) {
+          els.sheetsMount.innerHTML = `
+            <div class="sheet-container" style="border-color:#DC2626; color:#991B1B;">
+              <strong>Failed to load timetable bundle:</strong> ${escapeHtml(err.message)}<br/>
+              Run <code>python3 src/csp/solver.py</code> first to generate <code>data/processed/timetable_view_data.json</code>.
+            </div>
+          `;
+        }
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

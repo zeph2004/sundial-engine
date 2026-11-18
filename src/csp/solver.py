@@ -1,0 +1,931 @@
+import sys
+import time
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from src.csp.affinity import (
+    SPECIALIZED_HARD_CATEGORIES,
+    generate_venue_affinity_config,
+    resolve_session_venues_and_tiers,
+)
+from src.csp.constraints import build_conflict_graph, intervals_overlap
+from src.csp.domain import (
+    build_domains,
+    get_compatible_venues,
+    get_valid_time_slots,
+    load_json,
+    run_preflight_checks,
+)
+
+
+DAY_INDEX_DEFAULT: Dict[str, int] = {
+    "MONDAY": 0,
+    "TUESDAY": 1,
+    "WEDNESDAY": 2,
+    "THURSDAY": 3,
+    "FRIDAY": 4,
+    "SATURDAY": 5,
+    "SUNDAY": 6,
+}
+
+
+def compute_slot_bit(day_idx: int, period: int, periods_per_day: int = 18) -> int:
+    """Maps a (day_idx, period) pair (1-indexed period) to its bit index in a 108-bit integer."""
+    return day_idx * periods_per_day + (period - 1)
+
+
+def compute_time_mask(
+    day: str,
+    start_period: int,
+    duration: int,
+    day_to_idx: Dict[str, int] = DAY_INDEX_DEFAULT,
+    periods_per_day: int = 18,
+) -> int:
+    """Computes the 108-bit integer mask for a contiguous (day, start_period, duration) block."""
+    d_idx = day_to_idx[day]
+    base_bit = d_idx * periods_per_day + (start_period - 1)
+    return ((1 << duration) - 1) << base_bit
+
+
+@dataclass
+class SolverStats:
+    total_variables: int
+    status: str
+    runtime_seconds: float
+    nodes_visited: int
+    backtracks: int
+    pruned_values: int
+    assigned_count: int
+
+
+class TimetableCSPSolver:
+    """
+    Pure-Python Backtracking CSP Solver with:
+      1. Factored Time-First Domain Representation & 108-bit Integer Bitmasks
+      2. 3-Tier Departmental Venue Affinity & Hard Specialized Lab Sub-Pools
+      3. Strict 2-Condition Saturday Fallback via Weekday-Aware MRV & Lexicographic Ordering
+      4. Dynamic Venue Occupancy & Eager Room-Pool Forward Checking
+      5. Reversible Forward Checking via Lightweight Undo Logs (Zero deepcopy)
+    """
+
+    def __init__(
+        self,
+        sessions: List[Dict[str, Any]],
+        venues: List[Dict[str, Any]],
+        schema: Dict[str, Any],
+        affinity_config: Dict[str, Any] | None = None,
+        include_fallback_venues: bool = False,
+        timeout_seconds: float = 60.0,
+    ) -> None:
+        self.sessions = sessions
+        self.venues = venues
+        self.schema = schema
+        self.affinity_config = affinity_config
+        self.include_fallback_venues = include_fallback_venues
+        self.timeout_seconds = timeout_seconds
+
+        grid = schema["calendar_grid"]
+        self.periods_per_day: int = grid.get("periods_per_day", 18)
+        active_days: List[str] = grid["active_days"]
+        self.day_to_idx: Dict[str, int] = {d: i for i, d in enumerate(active_days)}
+
+        # Map sessions and venues
+        self.session_by_id: Dict[str, Dict[str, Any]] = {s["sessionId"]: s for s in sessions}
+        self.venue_by_id: Dict[int | str, Dict[str, Any]] = {v["venueId"]: v for v in venues}
+        self.all_var_ids: List[str] = [s["sessionId"] for s in sessions]
+
+        # Build static conflict graph G_conflict over shared lecturers and cohorts
+        self.adj, self.graph_diagnostics = build_conflict_graph(sessions)
+        self.static_degree: Dict[str, int] = {
+            sid: len(neighbors) for sid, neighbors in self.adj.items()
+        }
+
+        # Precompute slot_to_Mask[(day, start_p, duration)] -> 108-bit int
+        self.slot_to_Mask: Dict[Tuple[str, int, int], int] = {}
+        self.slot_single_bit: Dict[Tuple[str, int], int] = {}
+        for day in active_days:
+            for p in range(1, self.periods_per_day + 1):
+                bit = compute_slot_bit(self.day_to_idx[day], p, self.periods_per_day)
+                self.slot_single_bit[(day, p)] = 1 << bit
+            for dur in (1, 2, 4, 6):
+                for start_p in range(1, self.periods_per_day - dur + 2):
+                    self.slot_to_Mask[(day, start_p, dur)] = compute_time_mask(
+                        day, start_p, dur, self.day_to_idx, self.periods_per_day
+                    )
+
+        # Factor each variable's unary domain into:
+        #   1) active_time_slots[x_i]: set[tuple[str, int]]
+        #   2) weekday_slot_count[x_i]: count of active slots where day != "SATURDAY"
+        #   3) compatible_venues[x_i]: ordered list[int | str] ([Tier 1A -> Tier 1B -> Tier 1C -> Tier 2])
+        #   4) venue_tier_label[x_i][vid]: human-readable tier label
+        #   5) venue_tier_rank[x_i][vid]: 1 for Tier 1A/1B/1C affinity, 2 for Tier 2 general overflow
+        self.active_time_slots: Dict[str, Set[Tuple[str, int]]] = {}
+        self.weekday_slot_count: Dict[str, int] = {}
+        self.initial_time_slots: Dict[str, Set[Tuple[str, int]]] = {}
+        self.compatible_venues: Dict[str, List[int | str]] = {}
+        self.venue_tier_label: Dict[str, Dict[int | str, str]] = {}
+        self.venue_tier_rank: Dict[str, Dict[int | str, int]] = {}
+        self.var_duration: Dict[str, int] = {}
+        self.var_is_evening: Dict[str, bool] = {}
+        self.var_category: Dict[str, str] = {}
+        self.var_lecturers: Dict[str, List[str]] = {}
+        self.var_cohorts: Dict[str, List[str]] = {}
+
+        # Pre-index var_overlapping_slots[x_i][(day, p)] -> list[tuple[str, int]]
+        self.var_overlapping_slots: Dict[str, Dict[Tuple[str, int], List[Tuple[str, int]]]] = {}
+
+        # Group variables by their exact unordered venue pool key for eager room-supply forward checking
+        self.var_pool_key: Dict[str, Tuple[int | str, ...]] = {}
+        self.vars_by_pool: Dict[Tuple[int | str, ...], List[str]] = defaultdict(list)
+        self.pools_by_venue: Dict[int | str, List[Tuple[int | str, ...]]] = defaultdict(list)
+
+        for s in sessions:
+            sid = s["sessionId"]
+            dur = s["durationPeriods"]
+            is_eve = s["isEveningStream"]
+            req_cat = s["requiredVenueCategory"]
+
+            self.var_duration[sid] = dur
+            self.var_is_evening[sid] = is_eve
+            self.var_category[sid] = req_cat
+            self.var_lecturers[sid] = list(s.get("lecturers", []))
+            self.var_cohorts[sid] = list(s.get("targetCohorts", []))
+
+            t_slots = get_valid_time_slots(is_evening=is_eve, duration=dur, schema=schema)
+            self.active_time_slots[sid] = set(t_slots)
+            self.initial_time_slots[sid] = set(t_slots)
+            self.weekday_slot_count[sid] = sum(1 for (d, _) in t_slots if d != "SATURDAY")
+
+            ordered_vids, tier_labels, tier_ranks = resolve_session_venues_and_tiers(
+                session=s,
+                venues=venues,
+                schema=schema,
+                affinity_config=affinity_config,
+                include_fallbacks=include_fallback_venues,
+            )
+            self.compatible_venues[sid] = ordered_vids
+            self.venue_tier_label[sid] = tier_labels
+            self.venue_tier_rank[sid] = tier_ranks
+
+            pool_key = tuple(sorted(ordered_vids, key=str))
+            self.var_pool_key[sid] = pool_key
+            self.vars_by_pool[pool_key].append(sid)
+
+            # Build var_overlapping_slots[sid][(day, p)]
+            overlap_map: Dict[Tuple[str, int], List[Tuple[str, int]]] = defaultdict(list)
+            for day, start_p in t_slots:
+                for p in range(start_p, start_p + dur):
+                    overlap_map[(day, p)].append((day, start_p))
+            self.var_overlapping_slots[sid] = overlap_map
+
+        # Register which venue pools contain each physical venue_id
+        self.pool_free_venue_count: Dict[Tuple[Tuple[int | str, ...], str, int], int] = {}
+        for pool_key in self.vars_by_pool:
+            num_v = len(pool_key)
+            for vid in pool_key:
+                self.pools_by_venue[vid].append(pool_key)
+            for day in active_days:
+                for p in range(1, self.periods_per_day + 1):
+                    self.pool_free_venue_count[(pool_key, day, p)] = num_v
+
+        # Dynamic state structures for search
+        self.venue_busy_mask: Dict[int | str, int] = {v["venueId"]: 0 for v in venues}
+        self.unassigned_vars: Set[str] = set(self.all_var_ids)
+        self.unassigned_degree: Dict[str, int] = dict(self.static_degree)
+        self.assignments: Dict[str, Tuple[str, int, int | str]] = {}
+
+        # Track day loads per cohort and lecturer for day_load_spread tie-breaking
+        self.cohort_day_load: Dict[Tuple[str, str], int] = defaultdict(int)
+        self.lecturer_day_load: Dict[Tuple[str, str], int] = defaultdict(int)
+
+        # Telemetry counters
+        self.nodes_visited: int = 0
+        self.backtracks: int = 0
+        self.pruned_values: int = 0
+        self._start_time: float = 0.0
+        self._timed_out: bool = False
+
+    def select_unassigned_variable(self) -> str:
+        """
+        Weekday-Aware MRV + Venue Pool Tightness + Degree Heuristic + Block Rigidity:
+          - If `len(active_time_slots[sid]) == 0`: immediate wipeout (`effective_mrv = 0`).
+          - While `weekday_slot_count[sid] > 0`: `effective_mrv = weekday_slot_count[sid] * min(|venues|, 4)`
+            so sessions whose Monday-Friday options are running low are scheduled before their last
+            weekday slot is stolen.
+          - Once `weekday_slot_count[sid] == 0` (Monday-Friday is 100% full/infeasible for `sid`
+            under Condition 1 or Condition 2): `sid` transitions cleanly to Saturday fallback
+            (`effective_mrv = 1000 + len(active_time_slots[sid])`).
+        """
+        active_slots = self.active_time_slots
+        wk_counts = self.weekday_slot_count
+        compat_venues = self.compatible_venues
+        unassigned_deg = self.unassigned_degree
+        static_deg = self.static_degree
+        durations = self.var_duration
+
+        def _var_key(sid: str) -> Tuple[int, int, int, int, int, str]:
+            tot = len(active_slots[sid])
+            if tot == 0:
+                return (0, 0, -unassigned_deg[sid], -static_deg[sid], -durations[sid], sid)
+            wk = wk_counts[sid]
+            v_factor = min(len(compat_venues[sid]), 4)
+            if wk > 0:
+                eff_mrv = wk * v_factor
+                raw_mrv = wk
+            else:
+                eff_mrv = 1000 + tot * v_factor
+                raw_mrv = 1000 + tot
+            return (
+                eff_mrv,
+                raw_mrv,
+                -unassigned_deg[sid],
+                -static_deg[sid],
+                -durations[sid],
+                sid,
+            )
+
+        return min(self.unassigned_vars, key=_var_key)
+
+    def order_domain_values(self, sid: str) -> List[Tuple[str, int, int | str]]:
+        """
+        Lexicographic Saturday-Fallback + Affinity-Aware Time-Slot LCV Value Ordering:
+          Sorts candidate (day, start_p) ascending by:
+            (is_saturday, twilight_penalty, best_available_venue_tier, conflict_score, subtier_rank, day_load_spread)
+          where:
+            - `is_saturday = 1 if day == "SATURDAY" else 0`:
+              Monday-Friday (`is_saturday == 0`) ALWAYS beats Saturday (`is_saturday == 1`),
+              even if Monday-Friday requires a Tier 2 general classroom!
+            - `twilight_penalty = 1 if (isEveningStream and start_p < 13) else 0`
+            - `best_available_venue_tier = 1` (Tier 1A/1B/1C) vs `2` (Tier 2 General Overflow)
+            - `conflict_score`: LCV count of overlapping active slots in unassigned neighbors
+            - `day_load_spread`: current assigned periods on `day` for `sid`'s cohorts + lecturers
+        """
+        dur = self.var_duration[sid]
+        is_eve = self.var_is_evening[sid]
+        cohorts = self.var_cohorts[sid]
+        lecturers = self.var_lecturers[sid]
+        compat_vids = self.compatible_venues[sid]
+        tier_ranks = self.venue_tier_rank[sid]
+        tier_labels = self.venue_tier_label[sid]
+        venue_busy = self.venue_busy_mask
+        unassigned = self.unassigned_vars
+        active_slots = self.active_time_slots
+        var_overlaps = self.var_overlapping_slots
+
+        unassigned_neighbors = [nb for nb in self.adj[sid] if nb in unassigned]
+
+        scored_placements: List[Tuple[int, int, int, int, int, int, int, int, Tuple[str, int, int | str]]] = []
+        for day, start_p in active_slots[sid]:
+            time_mask = self.slot_to_Mask[(day, start_p, dur)]
+
+            # Find best free venue in priority order [Tier 1A -> Tier 1B -> Tier 1C -> Tier 2]
+            chosen_venue: Optional[int | str] = None
+            for vid in compat_vids:
+                if (venue_busy[vid] & time_mask) == 0:
+                    chosen_venue = vid
+                    break
+
+            if chosen_venue is None:
+                continue
+
+            is_saturday = 1 if day == "SATURDAY" else 0
+            best_tier = tier_ranks[chosen_venue]
+            lbl = tier_labels[chosen_venue]
+            if lbl.startswith("Tier 1A"):
+                subtier_rank = 0
+            elif lbl.startswith("Tier 1B"):
+                subtier_rank = 1
+            elif lbl.startswith("Tier 1C"):
+                subtier_rank = 2
+            else:
+                subtier_rank = 3
+
+            # Compute LCV conflict score across unassigned neighbors
+            conflict_score = 0
+            if dur == 1:
+                dp = (day, start_p)
+                for nb in unassigned_neighbors:
+                    nb_active = active_slots[nb]
+                    for cand in var_overlaps[nb].get(dp, ()):
+                        if cand in nb_active:
+                            conflict_score += 1
+            else:
+                for nb in unassigned_neighbors:
+                    nb_active = active_slots[nb]
+                    nb_ov = var_overlaps[nb]
+                    nb_dur = self.var_duration[nb]
+                    if nb_dur == 1:
+                        for p in range(start_p, start_p + dur):
+                            if (day, p) in nb_active:
+                                conflict_score += 1
+                    else:
+                        seen_cands: Set[Tuple[str, int]] = set()
+                        for p in range(start_p, start_p + dur):
+                            for cand in nb_ov.get((day, p), ()):
+                                if cand in nb_active and cand not in seen_cands:
+                                    seen_cands.add(cand)
+                                    conflict_score += 1
+
+            twilight_penalty = 1 if (is_eve and start_p < 13) else 0
+
+            day_load = 0
+            for c in cohorts:
+                day_load += self.cohort_day_load[(c, day)]
+            for l in lecturers:
+                day_load += self.lecturer_day_load[(l, day)]
+
+            scored_placements.append((
+                is_saturday,
+                twilight_penalty,
+                best_tier,
+                conflict_score,
+                subtier_rank,
+                day_load,
+                self.day_to_idx[day],
+                start_p,
+                (day, start_p, chosen_venue),
+            ))
+
+        scored_placements.sort()
+        return [item[8] for item in scored_placements]
+
+    def _remove_active_slot(
+        self,
+        var_id: str,
+        slot: Tuple[str, int],
+        undo_log: List[Tuple[str, Tuple[str, int]]],
+    ) -> None:
+        self.active_time_slots[var_id].remove(slot)
+        if slot[0] != "SATURDAY":
+            self.weekday_slot_count[var_id] -= 1
+        undo_log.append((var_id, slot))
+        self.pruned_values += 1
+
+    def forward_check(
+        self,
+        sid: str,
+        day: str,
+        start_p: int,
+        dur: int,
+        venue_id: int | str,
+        undo_log: List[Tuple[str, Tuple[str, int]]],
+    ) -> bool:
+        """
+        Reversible Forward Checking:
+          1. Prunes overlapping (day, start_p_j) from all unassigned neighbors x_j in adj[sid].
+          2. Eagerly checks room supply for every venue pool affected by `venue_id` on each
+             covered (day, p): if free rooms in that pool drop to 0 at (day, p), prunes all
+             covering (day, start_p_k) from all unassigned sessions x_k sharing that pool.
+          Returns False immediately on any domain wipeout (|active_time_slots| == 0).
+        """
+        unassigned = self.unassigned_vars
+        active_slots = self.active_time_slots
+        var_overlaps = self.var_overlapping_slots
+
+        # 1. Binary conflict graph pruning (Lecturer & Cohort non-overlap)
+        for nb in self.adj[sid]:
+            if nb not in unassigned:
+                continue
+            nb_active = active_slots[nb]
+            nb_ov = var_overlaps[nb]
+            for p in range(start_p, start_p + dur):
+                for cand in nb_ov.get((day, p), ()):
+                    if cand in nb_active:
+                        self._remove_active_slot(nb, cand, undo_log)
+            if not nb_active:
+                return False
+
+        # 2. Eager venue-pool room-supply forward checking across all pools containing `venue_id`
+        for pool_key in self.pools_by_venue[venue_id]:
+            exhausted_periods = [
+                p for p in range(start_p, start_p + dur)
+                if self.pool_free_venue_count[(pool_key, day, p)] == 0
+            ]
+            if not exhausted_periods:
+                continue
+            for other_sid in self.vars_by_pool[pool_key]:
+                if other_sid not in unassigned:
+                    continue
+                other_active = active_slots[other_sid]
+                other_ov = var_overlaps[other_sid]
+                for p in exhausted_periods:
+                    for cand in other_ov.get((day, p), ()):
+                        if cand in other_active:
+                            self._remove_active_slot(other_sid, cand, undo_log)
+                if not other_active:
+                    return False
+
+        return True
+
+    def _restore(
+        self,
+        sid: str,
+        day: str,
+        start_p: int,
+        dur: int,
+        venue_id: int | str,
+        time_mask: int,
+        undo_log: List[Tuple[str, Tuple[str, int]]],
+    ) -> None:
+        """Reverses all state mutations made during a single assignment step in O(|undo_log|)."""
+        active_slots = self.active_time_slots
+        wk_counts = self.weekday_slot_count
+        for var_id, slot in undo_log:
+            active_slots[var_id].add(slot)
+            if slot[0] != "SATURDAY":
+                wk_counts[var_id] += 1
+
+        self.venue_busy_mask[venue_id] &= ~time_mask
+        for pool_key in self.pools_by_venue[venue_id]:
+            for p in range(start_p, start_p + dur):
+                self.pool_free_venue_count[(pool_key, day, p)] += 1
+
+        for c in self.var_cohorts[sid]:
+            self.cohort_day_load[(c, day)] -= dur
+        for l in self.var_lecturers[sid]:
+            self.lecturer_day_load[(l, day)] -= dur
+
+    def _backtrack(self) -> bool:
+        if not self.unassigned_vars:
+            return True
+
+        if (self.nodes_visited & 255) == 0:
+            if (time.perf_counter() - self._start_time) > self.timeout_seconds:
+                self._timed_out = True
+                return False
+
+        sid = self.select_unassigned_variable()
+        if not self.active_time_slots[sid]:
+            self.backtracks += 1
+            return False
+
+        self.nodes_visited += 1
+
+        # Mark sid as assigned and update dynamic degrees
+        self.unassigned_vars.remove(sid)
+        for nb in self.adj[sid]:
+            if nb in self.unassigned_vars:
+                self.unassigned_degree[nb] -= 1
+
+        dur = self.var_duration[sid]
+        ordered_placements = self.order_domain_values(sid)
+
+        for day, start_p, chosen_venue in ordered_placements:
+            time_mask = self.slot_to_Mask[(day, start_p, dur)]
+
+            # Apply assignment state updates
+            self.assignments[sid] = (day, start_p, chosen_venue)
+            self.venue_busy_mask[chosen_venue] |= time_mask
+            for pool_key in self.pools_by_venue[chosen_venue]:
+                for p in range(start_p, start_p + dur):
+                    self.pool_free_venue_count[(pool_key, day, p)] -= 1
+
+            for c in self.var_cohorts[sid]:
+                self.cohort_day_load[(c, day)] += dur
+            for l in self.var_lecturers[sid]:
+                self.lecturer_day_load[(l, day)] += dur
+
+            undo_log: List[Tuple[str, Tuple[str, int]]] = []
+            if self.forward_check(sid, day, start_p, dur, chosen_venue, undo_log):
+                if self._backtrack():
+                    return True
+
+            # Undo state changes on failure
+            del self.assignments[sid]
+            self._restore(sid, day, start_p, dur, chosen_venue, time_mask, undo_log)
+
+        # Restore variable to unassigned set
+        for nb in self.adj[sid]:
+            if nb in self.unassigned_vars:
+                self.unassigned_degree[nb] += 1
+        self.unassigned_vars.add(sid)
+        self.backtracks += 1
+        return False
+
+    def solve(self) -> Tuple[Dict[str, Tuple[str, int, int | str]], SolverStats]:
+        """Executes backtracking search and returns (assignments, stats)."""
+        required_limit = max(sys.getrecursionlimit(), len(self.sessions) * 3 + 1000)
+        if sys.getrecursionlimit() < required_limit:
+            sys.setrecursionlimit(required_limit)
+
+        self._start_time = time.perf_counter()
+        self._timed_out = False
+
+        # Immediate check for any initial unary wipeout
+        if any(len(slots) == 0 or len(self.compatible_venues[sid]) == 0
+               for sid, slots in self.active_time_slots.items()):
+            elapsed = time.perf_counter() - self._start_time
+            return {}, SolverStats(
+                total_variables=len(self.sessions),
+                status="UNSATISFIABLE",
+                runtime_seconds=elapsed,
+                nodes_visited=0,
+                backtracks=0,
+                pruned_values=0,
+                assigned_count=0,
+            )
+
+        solved = self._backtrack()
+        elapsed = time.perf_counter() - self._start_time
+
+        if solved:
+            status = "SOLVED"
+        elif self._timed_out:
+            status = "TIMEOUT"
+        else:
+            status = "UNSATISFIABLE"
+
+        stats = SolverStats(
+            total_variables=len(self.sessions),
+            status=status,
+            runtime_seconds=elapsed,
+            nodes_visited=self.nodes_visited,
+            backtracks=self.backtracks,
+            pruned_values=self.pruned_values,
+            assigned_count=len(self.assignments),
+        )
+        return dict(self.assignments), stats
+
+
+def classify_saturday_placements(
+    sessions: List[Dict[str, Any]],
+    assignments: Dict[str, Tuple[str, int, int | str]],
+) -> Dict[str, Any]:
+    """
+    Classifies every session into:
+      - `"Weekday"`
+      - `"Saturday (Condition 1: Cohort >60p Overflow)"`
+      - `"Saturday (Condition 2: Hard-Constraint Bottleneck)"`
+    and computes comparative Saturday telemetry between the Sundial CSP solution
+    and the ATC Ground Truth.
+    """
+    cohort_total_periods: Dict[str, int] = defaultdict(int)
+    cohort_6p_blocks: Dict[str, int] = defaultdict(int)
+    cohort_is_evening: Dict[str, bool] = {}
+    all_cohorts: Set[str] = set()
+
+    for s in sessions:
+        dur = s["durationPeriods"]
+        is_eve = s["isEveningStream"]
+        for c in s.get("targetCohorts", []):
+            all_cohorts.add(c)
+            cohort_total_periods[c] += dur
+            if dur == 6:
+                cohort_6p_blocks[c] += 1
+            cohort_is_evening[c] = is_eve or c.endswith("-E")
+
+    # Condition 1 cohorts: >60p Full-Time or >30p standard Evening (P13-P18 = 6p/day * 5 days = 30p)
+    # or >5 six-period afternoon blocks
+    cond1_cohorts: Set[str] = set()
+    for c in all_cohorts:
+        if cohort_is_evening.get(c, False):
+            if cohort_total_periods[c] > 30:
+                cond1_cohorts.add(c)
+        else:
+            if cohort_total_periods[c] > 60 or cohort_6p_blocks[c] > 5:
+                cond1_cohorts.add(c)
+
+    session_saturday_reason: Dict[str, str] = {}
+    csp_sat_cond1: List[str] = []
+    csp_sat_cond2: List[str] = []
+    csp_sat_cohorts: Set[str] = set()
+
+    gt_sat_sessions: List[str] = []
+    gt_sat_cohorts: Set[str] = set()
+
+    for s in sessions:
+        sid = s["sessionId"]
+        cohs = s.get("targetCohorts", [])
+        if s["groundTruth"]["scheduledDay"] == "SATURDAY":
+            gt_sat_sessions.append(sid)
+            gt_sat_cohorts.update(cohs)
+
+        if sid not in assignments:
+            session_saturday_reason[sid] = "Unassigned"
+            continue
+
+        day, _, _ = assignments[sid]
+        if day != "SATURDAY":
+            session_saturday_reason[sid] = "Weekday"
+        else:
+            csp_sat_cohorts.update(cohs)
+            if any(c in cond1_cohorts for c in cohs):
+                reason = "Saturday (Condition 1: Cohort >60p Overflow)"
+                csp_sat_cond1.append(sid)
+            else:
+                reason = "Saturday (Condition 2: Hard-Constraint Bottleneck)"
+                csp_sat_cond2.append(sid)
+            session_saturday_reason[sid] = reason
+
+    total_cohorts = len(all_cohorts)
+    csp_sat_free_cohorts = total_cohorts - len(csp_sat_cohorts)
+    gt_sat_free_cohorts = total_cohorts - len(gt_sat_cohorts)
+
+    return {
+        "session_reasons": session_saturday_reason,
+        "condition1_cohorts": sorted(cond1_cohorts),
+        "cohort_total_periods": dict(cohort_total_periods),
+        "csp_saturday_total": len(csp_sat_cond1) + len(csp_sat_cond2),
+        "csp_saturday_cond1_count": len(csp_sat_cond1),
+        "csp_saturday_cond2_count": len(csp_sat_cond2),
+        "csp_saturday_cond1_sessions": csp_sat_cond1,
+        "csp_saturday_cond2_sessions": csp_sat_cond2,
+        "gt_saturday_total": len(gt_sat_sessions),
+        "total_cohorts": total_cohorts,
+        "csp_saturday_free_cohorts": csp_sat_free_cohorts,
+        "gt_saturday_free_cohorts": gt_sat_free_cohorts,
+    }
+
+
+def verify_solution(
+    sessions: List[Dict[str, Any]],
+    assignments: Dict[str, Tuple[str, int, int | str]],
+    initial_domains: Dict[str, List[Tuple[str, int, int | str]]],
+    venue_tier_labels: Optional[Dict[str, Dict[int | str, str]]] = None,
+) -> Dict[str, Any]:
+    """
+    Independent Post-Solve Hard-Constraint, Saturday Fallback & Venue Affinity Verifier.
+    """
+    unassigned = [s["sessionId"] for s in sessions if s["sessionId"] not in assignments]
+
+    unary_violations: List[str] = []
+    domain_sets = {sid: set(dom) for sid, dom in initial_domains.items()}
+    for sid, val in assignments.items():
+        if val not in domain_sets.get(sid, set()):
+            unary_violations.append(sid)
+
+    lec_slot_usage: Dict[Tuple[str, str, int], List[str]] = defaultdict(list)
+    coh_slot_usage: Dict[Tuple[str, str, int], List[str]] = defaultdict(list)
+    ven_slot_usage: Dict[Tuple[int | str, str, int], List[str]] = defaultdict(list)
+
+    lecturer_overlaps = 0
+    cohort_overlaps = 0
+    venue_double_bookings = 0
+
+    n = len(sessions)
+    for i in range(n):
+        sa = sessions[i]
+        sida = sa["sessionId"]
+        if sida not in assignments:
+            continue
+        day_a, start_a, ven_a = assignments[sida]
+        dur_a = sa["durationPeriods"]
+        lecs_a = set(sa.get("lecturers", []))
+        cohs_a = set(sa.get("targetCohorts", []))
+
+        for p in range(start_a, start_a + dur_a):
+            ven_slot_usage[(ven_a, day_a, p)].append(sida)
+            for l in lecs_a:
+                lec_slot_usage[(l, day_a, p)].append(sida)
+            for c in cohs_a:
+                coh_slot_usage[(c, day_a, p)].append(sida)
+
+        for j in range(i + 1, n):
+            sb = sessions[j]
+            sidb = sb["sessionId"]
+            if sidb not in assignments:
+                continue
+            day_b, start_b, ven_b = assignments[sidb]
+            dur_b = sb["durationPeriods"]
+
+            if not intervals_overlap(day_a, start_a, dur_a, day_b, start_b, dur_b):
+                continue
+
+            if lecs_a & set(sb.get("lecturers", [])):
+                lecturer_overlaps += 1
+            if cohs_a & set(sb.get("targetCohorts", [])):
+                cohort_overlaps += 1
+            if ven_a == ven_b:
+                venue_double_bookings += 1
+
+    evening_total = 0
+    evening_twilight_used = 0
+    tier_counts: Counter = Counter()
+    specialized_total = 0
+    specialized_locked_ok = 0
+
+    for s in sessions:
+        sid = s["sessionId"]
+        if sid not in assignments:
+            continue
+        _, start_p, vid = assignments[sid]
+        if s["isEveningStream"]:
+            evening_total += 1
+            if start_p < 13:
+                evening_twilight_used += 1
+
+        lbl = (
+            venue_tier_labels.get(sid, {}).get(vid, "Tier 1A: Module Preferred")
+            if venue_tier_labels
+            else "Tier 1A: Module Preferred"
+        )
+        tier_counts[lbl] += 1
+
+        if s["requiredVenueCategory"] in SPECIALIZED_HARD_CATEGORIES:
+            specialized_total += 1
+            if lbl.startswith("Tier 1"):
+                specialized_locked_ok += 1
+
+    tier_1a = tier_counts["Tier 1A: Module Preferred"]
+    tier_1b = tier_counts["Tier 1B: Cohort Home"]
+    tier_1c = tier_counts["Tier 1C: Dept Prefix Pool"]
+    tier_1_total = tier_1a + tier_1b + tier_1c
+    tier_2_overflow = tier_counts["Tier 2: General Overflow"]
+
+    sat_report = classify_saturday_placements(sessions, assignments)
+
+    valid = (
+        len(unassigned) == 0
+        and len(unary_violations) == 0
+        and lecturer_overlaps == 0
+        and cohort_overlaps == 0
+        and venue_double_bookings == 0
+    )
+
+    return {
+        "valid": valid,
+        "total_sessions": len(sessions),
+        "assigned_sessions": len(assignments),
+        "unassigned_count": len(unassigned),
+        "unary_violations": len(unary_violations),
+        "lecturer_overlaps": lecturer_overlaps,
+        "cohort_overlaps": cohort_overlaps,
+        "venue_double_bookings": venue_double_bookings,
+        "lecturer_slot_collisions": sum(1 for v in lec_slot_usage.values() if len(v) > 1),
+        "cohort_slot_collisions": sum(1 for v in coh_slot_usage.values() if len(v) > 1),
+        "venue_slot_collisions": sum(1 for v in ven_slot_usage.values() if len(v) > 1),
+        "evening_total": evening_total,
+        "evening_twilight_used": evening_twilight_used,
+        "specialized_total": specialized_total,
+        "specialized_locked_ok": specialized_locked_ok,
+        "tier_1a_count": tier_1a,
+        "tier_1b_count": tier_1b,
+        "tier_1c_count": tier_1c,
+        "tier_1_total": tier_1_total,
+        "tier_2_overflow": tier_2_overflow,
+        "saturday_report": sat_report,
+    }
+
+
+def run_benchmark(
+    label: str,
+    sessions: List[Dict[str, Any]],
+    venues: List[Dict[str, Any]],
+    schema: Dict[str, Any],
+    affinity_config: Dict[str, Any] | None = None,
+    include_fallback_venues: bool = False,
+) -> Tuple[Dict[str, Tuple[str, int, int | str]], SolverStats, Dict[str, Any], TimetableCSPSolver]:
+    print(f"\n{'=' * 72}")
+    print(f"  {label}")
+    print(f"{'=' * 72}")
+
+    preflight = run_preflight_checks(
+        sessions,
+        venues,
+        schema,
+        include_fallback_venues=include_fallback_venues,
+        affinity_config=affinity_config,
+    )
+    print(f"  Preflight Pigeonhole Check : {'PASS' if preflight['passed'] else 'FAIL'}")
+
+    initial_domains = build_domains(
+        sessions,
+        venues,
+        schema,
+        include_fallback_venues=include_fallback_venues,
+        affinity_config=affinity_config,
+    )
+    solver = TimetableCSPSolver(
+        sessions=sessions,
+        venues=venues,
+        schema=schema,
+        affinity_config=affinity_config,
+        include_fallback_venues=include_fallback_venues,
+    )
+    assignments, stats = solver.solve()
+
+    print(f"  Total Variables (|X|)      : {stats.total_variables}")
+    print(f"  Conflict Graph Edges (|E|) : {solver.graph_diagnostics['num_edges']:,}")
+    print(f"  Solve Status               : {stats.status}")
+    print(f"  Wall-Clock Runtime         : {stats.runtime_seconds * 1000:.2f} ms ({stats.runtime_seconds:.4f} s)")
+    print(f"  Recursive Nodes Visited    : {stats.nodes_visited:,}")
+    print(f"  Backtracks                 : {stats.backtracks:,}")
+    print(f"  Forward-Check Pruned Slots : {stats.pruned_values:,}")
+
+    verification = verify_solution(
+        sessions, assignments, initial_domains, venue_tier_labels=solver.venue_tier_label
+    )
+    tot = max(1, verification["total_sessions"])
+    spec_tot = max(1, verification["specialized_total"])
+    sat = verification["saturday_report"]
+
+    print("\n  --- Independent Post-Solve Hard-Constraint Verification ---")
+    print(f"  All constraints satisfied? : {verification['valid']}")
+    print(f"  Assigned Sessions          : {verification['assigned_sessions']} / {verification['total_sessions']}")
+    print(f"  Unary Domain Violations    : {verification['unary_violations']}")
+    print(f"  Lecturer Overlaps          : {verification['lecturer_overlaps']} pairs ({verification['lecturer_slot_collisions']} slot collisions)")
+    print(f"  Cohort Overlaps            : {verification['cohort_overlaps']} pairs ({verification['cohort_slot_collisions']} slot collisions)")
+    print(f"  Venue Double-Bookings      : {verification['venue_double_bookings']} pairs ({verification['venue_slot_collisions']} slot collisions)")
+    print(f"  Evening Twilight (P11-P12) : {verification['evening_twilight_used']} / {verification['evening_total']} evening sessions")
+
+    print("\n  --- 2-Condition Saturday Fallback Audit (Mon-Fri Default) ---")
+    print(
+        f"  Total Saturday Sessions    : Sundial CSP = {sat['csp_saturday_total']} / {tot} "
+        f"({sat['csp_saturday_total'] / tot * 100:.1f}%)  vs.  ATC Ground Truth = {sat['gt_saturday_total']} / {tot} "
+        f"({sat['gt_saturday_total'] / tot * 100:.1f}%)"
+    )
+    print(
+        f"    * Condition 1 (>60p FT / >30p Eve Overflow) : {sat['csp_saturday_cond1_count']} sessions"
+    )
+    print(
+        f"    * Condition 2 (Hard-Constraint Bottleneck)  : {sat['csp_saturday_cond2_count']} sessions"
+    )
+    print(
+        f"  100% Saturday-Free Cohorts : Sundial CSP = {sat['csp_saturday_free_cohorts']} / {sat['total_cohorts']} "
+        f"({sat['csp_saturday_free_cohorts'] / max(1, sat['total_cohorts']) * 100:.1f}%)  vs.  "
+        f"ATC Ground Truth = {sat['gt_saturday_free_cohorts']} / {sat['total_cohorts']} "
+        f"({sat['gt_saturday_free_cohorts'] / max(1, sat['total_cohorts']) * 100:.1f}%)"
+    )
+
+    print("\n  --- Venue Realism & 3-Tier Departmental Affinity Metrics ---")
+    print(
+        f"  Specialized Lab/W/S Lock   : {verification['specialized_locked_ok']} / {verification['specialized_total']} "
+        f"({verification['specialized_locked_ok'] / spec_tot * 100:.1f}%)"
+    )
+    print(
+        f"  Tier 1A Exact Module Match : {verification['tier_1a_count']} / {verification['total_sessions']} "
+        f"({verification['tier_1a_count'] / tot * 100:.1f}%)"
+    )
+    print(
+        f"  Tier 1B Cohort Home Match  : {verification['tier_1b_count']} / {verification['total_sessions']} "
+        f"({verification['tier_1b_count'] / tot * 100:.1f}%)"
+    )
+    print(
+        f"  Tier 1C Dept Prefix Match  : {verification['tier_1c_count']} / {verification['total_sessions']} "
+        f"({verification['tier_1c_count'] / tot * 100:.1f}%)"
+    )
+    print(
+        f"  Tier 1 Total Affinity      : {verification['tier_1_total']} / {verification['total_sessions']} "
+        f"({verification['tier_1_total'] / tot * 100:.1f}%)"
+    )
+    print(
+        f"  Tier 2 General Overflow    : {verification['tier_2_overflow']} / {verification['total_sessions']} "
+        f"({verification['tier_2_overflow'] / tot * 100:.1f}%)"
+    )
+
+    return assignments, stats, verification, solver
+
+
+if __name__ == "__main__":
+    from src.viz.exporter import export_timetable_view_data  # type: ignore
+
+    root = Path(__file__).resolve().parents[2]
+    schema = load_json(root / "configs" / "institution_schema.json")
+    dataset = load_json(root / "data" / "raw" / "atc" / "atc-timetable-dataset.json")
+    csp_raw = load_json(root / "data" / "raw" / "atc" / "atc-csp-sessions.json")
+    all_sessions = csp_raw["sessions"]
+    venues = dataset["venues"]
+
+    affinity_path = root / "configs" / "atc_venue_affinity.json"
+    if not affinity_path.exists():
+        affinity_cfg = generate_venue_affinity_config(
+            all_sessions, venues, schema, output_path=affinity_path
+        )
+    else:
+        affinity_cfg = load_json(affinity_path)
+
+    # Mode A: Clean Primary Dataset (S0001..S1233, |X| = 1,233)
+    primary_sessions = [s for s in all_sessions if int(s["sessionId"][1:]) <= 1233]
+    assignments_a, stats_a, ver_a, solver_a = run_benchmark(
+        label="Benchmark Mode A: Clean Primary Dataset (S0001-S1233, |X| = 1,233)",
+        sessions=primary_sessions,
+        venues=venues,
+        schema=schema,
+        affinity_config=affinity_cfg,
+        include_fallback_venues=False,
+    )
+
+    # Mode B: Full Pre-Flight Verified Dataset (|X| = 1,299)
+    assignments_b, stats_b, ver_b, solver_b = run_benchmark(
+        label="Benchmark Mode B: Full Pre-Flight Verified Dataset (|X| = 1,299)",
+        sessions=all_sessions,
+        venues=venues,
+        schema=schema,
+        affinity_config=affinity_cfg,
+        include_fallback_venues=False,
+    )
+
+    out_path = export_timetable_view_data(
+        root=root,
+        schema=schema,
+        dataset=dataset,
+        csp_raw=csp_raw,
+        mode_a_tuple=(primary_sessions, assignments_a, stats_a, ver_a, solver_a.venue_tier_label),
+        mode_b_tuple=(all_sessions, assignments_b, stats_b, ver_b, solver_b.venue_tier_label),
+    )
+    print(f"\n  [Exporter] Wrote visualizer bundle -> {out_path}")

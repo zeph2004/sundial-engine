@@ -1,0 +1,6229 @@
+{
+  "schema_version": "1.0.0",
+  "institution_code": "ATC",
+  "description": "Declarative 3-Tier Departmental Venue Affinity & Hard Specialized Lab Sub-Pool Configuration. Tier 1A = Exact Module Preferred Venues; Tier 1B = Cohort Home Venues; Tier 1C = Department Prefix Pool; Tier 2 = General Category Overflow Pool.",
+  "category_overflow_policies": {
+    "Theory / Lecture Room": {
+      "restrict_to_prefix_or_module_pool": false,
+      "allow_general_category_fallback_only_if_empty": true,
+      "tier2_overflow_soft_penalty": 20,
+      "description": "Soft home-turf preference: prioritize Tier 1 (Module / Cohort Home / Dept Prefix) venues before overflowing into the general category pool."
+    },
+    "Computer / Digital Lab": {
+      "restrict_to_prefix_or_module_pool": false,
+      "allow_general_category_fallback_only_if_empty": true,
+      "tier2_overflow_soft_penalty": 20,
+      "description": "Soft home-turf preference: prioritize Tier 1 (Module / Cohort Home / Dept Prefix) venues before overflowing into the general category pool."
+    },
+    "Engineering / Science Lab": {
+      "restrict_to_prefix_or_module_pool": true,
+      "allow_general_category_fallback_only_if_empty": true,
+      "tier2_overflow_soft_penalty": 100,
+      "description": "Hard departmental sub-pool lock: sessions may only use venues in their module or department prefix pool."
+    },
+    "Workshop": {
+      "restrict_to_prefix_or_module_pool": true,
+      "allow_general_category_fallback_only_if_empty": true,
+      "tier2_overflow_soft_penalty": 100,
+      "description": "Hard departmental sub-pool lock: sessions may only use venues in their module or department prefix pool."
+    },
+    "Field / Site": {
+      "restrict_to_prefix_or_module_pool": true,
+      "allow_general_category_fallback_only_if_empty": true,
+      "tier2_overflow_soft_penalty": 100,
+      "description": "Hard departmental sub-pool lock: sessions may only use venues in their module or department prefix pool."
+    },
+    "Studio": {
+      "restrict_to_prefix_or_module_pool": true,
+      "allow_general_category_fallback_only_if_empty": true,
+      "tier2_overflow_soft_penalty": 100,
+      "description": "Hard departmental sub-pool lock: sessions may only use venues in their module or department prefix pool."
+    }
+  },
+  "module_and_prefix_rules": {
+    "by_module_code": {
+      "AET 04111": {
+        "Engineering / Science Lab": [
+          21
+        ],
+        "Theory / Lecture Room": [
+          3
+        ]
+      },
+      "AET 05111": {
+        "Computer / Digital Lab": [
+          64
+        ],
+        "Theory / Lecture Room": [
+          12
+        ]
+      },
+      "AET 06108": {
+        "Engineering / Science Lab": [
+          22
+        ]
+      },
+      "AET 06111": {
+        "Engineering / Science Lab": [
+          21
+        ],
+        "Theory / Lecture Room": [
+          12
+        ]
+      },
+      "AET 06112": {
+        "Engineering / Science Lab": [
+          21
+        ],
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "AEU 07111": {
+        "Theory / Lecture Room": [
+          14
+        ],
+        "Workshop": [
+          42
+        ]
+      },
+      "AEU 07112": {
+        "Theory / Lecture Room": [
+          53
+        ],
+        "Workshop": [
+          42
+        ]
+      },
+      "AEU 07113": {
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "AEU 07114": {
+        "Theory / Lecture Room": [
+          14
+        ],
+        "Workshop": [
+          42
+        ]
+      },
+      "AEU 07311": {
+        "Computer / Digital Lab": [
+          64
+        ],
+        "Engineering / Science Lab": [
+          22
+        ]
+      },
+      "AEU 07312": {
+        "Engineering / Science Lab": [
+          22
+        ],
+        "Theory / Lecture Room": [
+          57
+        ]
+      },
+      "AEU 07313": {
+        "Engineering / Science Lab": [
+          21,
+          22
+        ],
+        "Theory / Lecture Room": [
+          57
+        ]
+      },
+      "AEU 07314": {
+        "Computer / Digital Lab": [
+          64
+        ],
+        "Engineering / Science Lab": [
+          22
+        ]
+      },
+      "AEU 07315": {
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "AEU 08111": {
+        "Engineering / Science Lab": [
+          21,
+          22
+        ]
+      },
+      "AEU 08112": {
+        "Computer / Digital Lab": [
+          64
+        ],
+        "Engineering / Science Lab": [
+          22
+        ],
+        "Theory / Lecture Room": [
+          57
+        ]
+      },
+      "AEU 08113": {
+        "Engineering / Science Lab": [
+          21,
+          22
+        ],
+        "Theory / Lecture Room": [
+          57
+        ]
+      },
+      "AEU 08114": {
+        "Engineering / Science Lab": [
+          21,
+          22
+        ],
+        "Theory / Lecture Room": [
+          52
+        ]
+      },
+      "AEU 08115": {
+        "Engineering / Science Lab": [
+          21
+        ],
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "AEU 08116": {
+        "Engineering / Science Lab": [
+          22
+        ]
+      },
+      "AEU 08117": {
+        "Engineering / Science Lab": [
+          22
+        ],
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "AUT 04111": {
+        "Theory / Lecture Room": [
+          56
+        ]
+      },
+      "AUT 04112/MET 04114": {
+        "Theory / Lecture Room": [
+          18
+        ],
+        "Workshop": [
+          63
+        ]
+      },
+      "AUT 04113": {
+        "Theory / Lecture Room": [
+          51
+        ],
+        "Workshop": [
+          42
+        ]
+      },
+      "AUT 04114": {
+        "Field / Site": [
+          15
+        ]
+      },
+      "AUT 05111": {
+        "Theory / Lecture Room": [
+          12
+        ],
+        "Workshop": [
+          42
+        ]
+      },
+      "AUT 05112/MET 05102": {
+        "Theory / Lecture Room": [
+          18
+        ]
+      },
+      "AUT 05114/MET 06101": {
+        "Engineering / Science Lab": [
+          22
+        ],
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "AUT 06112/MET 06109": {
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "AUT 06113": {
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "AUT 06114": {
+        "Theory / Lecture Room": [
+          12
+        ],
+        "Workshop": [
+          63
+        ]
+      },
+      "AUT 06115/HET 06103": {
+        "Computer / Digital Lab": [
+          64
+        ]
+      },
+      "CAT 04101": {
+        "Studio": [
+          86
+        ],
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "CAT 04103": {
+        "Theory / Lecture Room": [
+          16
+        ]
+      },
+      "CAT 04104": {
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "CAT 05101": {
+        "Studio": [
+          86
+        ],
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "CAT 05102": {
+        "Theory / Lecture Room": [
+          16
+        ]
+      },
+      "CAT 05105": {
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "CAT 05106": {
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "CAT 05107": {
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "CAT 06102": {
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "CAT 06103": {
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "CAT 06106": {
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "CAT 06107": {
+        "Theory / Lecture Room": [
+          16
+        ]
+      },
+      "CDD 06111": {
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "CDD 06112": {
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "CDD 06113": {
+        "Computer / Digital Lab": [
+          44
+        ],
+        "Theory / Lecture Room": [
+          16
+        ]
+      },
+      "CDD 06114": {
+        "Computer / Digital Lab": [
+          44
+        ],
+        "Theory / Lecture Room": [
+          65
+        ]
+      },
+      "CDD 06115": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          58
+        ]
+      },
+      "CDD 06116": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "CDD 06117/MAT 06117": {
+        "Computer / Digital Lab": [
+          46
+        ]
+      },
+      "CDT 04112": {
+        "Computer / Digital Lab": [
+          6
+        ],
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "CDT 05112": {
+        "Computer / Digital Lab": [
+          2
+        ],
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "CDT 05113": {
+        "Computer / Digital Lab": [
+          2
+        ],
+        "Theory / Lecture Room": [
+          56
+        ]
+      },
+      "CDT 05114": {
+        "Computer / Digital Lab": [
+          6
+        ],
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "CDT 05115": {
+        "Computer / Digital Lab": [
+          6
+        ],
+        "Theory / Lecture Room": [
+          8
+        ]
+      },
+      "CDT 05116": {
+        "Computer / Digital Lab": [
+          6
+        ],
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "CED 06114": {
+        "Theory / Lecture Room": [
+          18
+        ]
+      },
+      "CED 06115/CID 06127/CAT 06101/CHT 06127": {
+        "Field / Site": [
+          15
+        ],
+        "Theory / Lecture Room": [
+          58
+        ]
+      },
+      "CED 06116/CID 06132/CHT 06132": {
+        "Field / Site": [
+          15
+        ]
+      },
+      "CED 06117/CHT 06133": {
+        "Field / Site": [
+          15
+        ]
+      },
+      "CED 06118": {
+        "Studio": [
+          86
+        ],
+        "Theory / Lecture Room": [
+          7
+        ]
+      },
+      "CED 06119/CID 06129/CAT 06104": {
+        "Theory / Lecture Room": [
+          7
+        ]
+      },
+      "CED 06120/CAT 06105": {
+        "Computer / Digital Lab": [
+          6
+        ],
+        "Theory / Lecture Room": [
+          7
+        ]
+      },
+      "CET 04115": {
+        "Theory / Lecture Room": [
+          18
+        ],
+        "Workshop": [
+          26
+        ]
+      },
+      "CET/CIT 05111/CHT 05120/CAT 05103": {
+        "Field / Site": [
+          28
+        ],
+        "Theory / Lecture Room": [
+          8
+        ]
+      },
+      "CET/CIT 05112/CHT 05121/CAT 05104": {
+        "Computer / Digital Lab": [
+          2
+        ],
+        "Field / Site": [
+          15
+        ]
+      },
+      "CET/CIT 05113/CHT 05122": {
+        "Engineering / Science Lab": [
+          61
+        ],
+        "Field / Site": [
+          15
+        ]
+      },
+      "CET/CIT 05114/CHT 05123": {
+        "Theory / Lecture Room": [
+          3
+        ]
+      },
+      "CET/CIT 05115/CHT 05124": {
+        "Engineering / Science Lab": [
+          60
+        ],
+        "Theory / Lecture Room": [
+          3
+        ]
+      },
+      "CEU 08113": {
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "CEU 08117/CHU 08113": {
+        "Theory / Lecture Room": [
+          56
+        ]
+      },
+      "CEU/CIU 07114": {
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "CEU/CIU 07115": {
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "CEU/CIU 07311": {
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "CEU/CIU 07312/CHU 07314": {
+        "Theory / Lecture Room": [
+          3
+        ]
+      },
+      "CEU/CIU 07313/CHU 07316": {
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "CEU/CIU 07314/CHU 07317": {
+        "Engineering / Science Lab": [
+          29
+        ],
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "CEU/CIU 07315": {
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "CEU/CIU 07316": {
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "CEU/CIU 08112/CHU 08114": {
+        "Theory / Lecture Room": [
+          7
+        ]
+      },
+      "CEU/CIU 08114/CHU 08112": {
+        "Theory / Lecture Room": [
+          18
+        ]
+      },
+      "CEU/CIU 08115": {
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "CEU/CIU 08116": {
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "CEU/CIU/CHU 07111": {
+        "Field / Site": [
+          28
+        ],
+        "Theory / Lecture Room": [
+          7
+        ]
+      },
+      "CEU/CIU/CHU 07112": {
+        "Theory / Lecture Room": [
+          18
+        ]
+      },
+      "CEU/CIU/CHU 07113": {
+        "Engineering / Science Lab": [
+          61
+        ],
+        "Theory / Lecture Room": [
+          18
+        ]
+      },
+      "CEU/CIU/CHU 08111": {
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "CHT 04115": {
+        "Engineering / Science Lab": [
+          61
+        ],
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "CHT 06121": {
+        "Theory / Lecture Room": [
+          65
+        ]
+      },
+      "CHT 06122": {
+        "Engineering / Science Lab": [
+          61
+        ],
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "CHT 06123": {
+        "Theory / Lecture Room": [
+          14,
+          5
+        ]
+      },
+      "CHT 06124": {
+        "Theory / Lecture Room": [
+          12,
+          65
+        ]
+      },
+      "CHT 06129": {
+        "Theory / Lecture Room": [
+          14,
+          20
+        ]
+      },
+      "CHU 07114": {
+        "Theory / Lecture Room": [
+          3,
+          57
+        ]
+      },
+      "CHU 07115": {
+        "Theory / Lecture Room": [
+          12,
+          55
+        ]
+      },
+      "CHU 07311": {
+        "Theory / Lecture Room": [
+          65
+        ]
+      },
+      "CHU 07312": {
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "CHU 07313": {
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "CHU 07315": {
+        "Theory / Lecture Room": [
+          31,
+          52
+        ]
+      },
+      "CHU 07318": {
+        "Theory / Lecture Room": [
+          65
+        ]
+      },
+      "CHU 08115": {
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "CHU 08116": {
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "CHU 08117": {
+        "Engineering / Science Lab": [
+          61
+        ],
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "CHU 08118": {
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "CID 06110": {
+        "Theory / Lecture Room": [
+          14
+        ]
+      },
+      "CID 06111": {
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "CID 06112": {
+        "Engineering / Science Lab": [
+          29
+        ],
+        "Theory / Lecture Room": [
+          14
+        ]
+      },
+      "CID 06113": {
+        "Theory / Lecture Room": [
+          14
+        ]
+      },
+      "CID 06114": {
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "CIT 04115": {
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "CIT 05116": {
+        "Theory / Lecture Room": [
+          16
+        ]
+      },
+      "CIT/CET/CHT 04111/CAT 04102": {
+        "Theory / Lecture Room": [
+          8
+        ]
+      },
+      "CIT/CET/CHT 04112": {
+        "Engineering / Science Lab": [
+          61
+        ],
+        "Theory / Lecture Room": [
+          8
+        ]
+      },
+      "CIT/CET/CHT 04113": {
+        "Studio": [
+          86
+        ],
+        "Theory / Lecture Room": [
+          8
+        ]
+      },
+      "CIT/CET/CHT 04114/CAT 04105": {
+        "Theory / Lecture Room": [
+          8
+        ],
+        "Workshop": [
+          50
+        ]
+      },
+      "CIU 07116": {
+        "Theory / Lecture Room": [
+          12
+        ]
+      },
+      "CIU 07317": {
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "CIU 08113": {
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "CIU 08117": {
+        "Theory / Lecture Room": [
+          14
+        ]
+      },
+      "CIU 08118": {
+        "Theory / Lecture Room": [
+          16
+        ]
+      },
+      "CST 04112/MAT 04115": {
+        "Computer / Digital Lab": [
+          2,
+          46,
+          6,
+          88
+        ],
+        "Theory / Lecture Room": [
+          16,
+          55
+        ]
+      },
+      "CST 04114/CST 04112/MAT 04116": {
+        "Computer / Digital Lab": [
+          2,
+          6
+        ],
+        "Theory / Lecture Room": [
+          58,
+          16
+        ]
+      },
+      "CST 04212": {
+        "Theory / Lecture Room": [
+          52,
+          56,
+          8
+        ]
+      },
+      "CST 05101": {
+        "Computer / Digital Lab": [
+          46
+        ],
+        "Theory / Lecture Room": [
+          56
+        ]
+      },
+      "CST 05102/CST 05105": {
+        "Computer / Digital Lab": [
+          6,
+          2
+        ],
+        "Theory / Lecture Room": [
+          14,
+          58
+        ]
+      },
+      "CST 06101/ITT 06101": {
+        "Computer / Digital Lab": [
+          6,
+          88
+        ],
+        "Theory / Lecture Room": [
+          7
+        ]
+      },
+      "CST 06102/MAT 6115": {
+        "Computer / Digital Lab": [
+          46
+        ],
+        "Theory / Lecture Room": [
+          7
+        ]
+      },
+      "CSU 07111": {
+        "Computer / Digital Lab": [
+          2,
+          44,
+          46
+        ],
+        "Theory / Lecture Room": [
+          17,
+          1,
+          13,
+          9
+        ]
+      },
+      "CSU 07112": {
+        "Computer / Digital Lab": [
+          2,
+          6
+        ],
+        "Theory / Lecture Room": [
+          17,
+          20,
+          52,
+          57
+        ]
+      },
+      "CSU 07115": {
+        "Engineering / Science Lab": [
+          41
+        ],
+        "Theory / Lecture Room": [
+          13,
+          20
+        ]
+      },
+      "CSU 07311": {
+        "Computer / Digital Lab": [
+          2,
+          88
+        ],
+        "Theory / Lecture Room": [
+          58,
+          14,
+          17,
+          20
+        ]
+      },
+      "CSU 07312": {
+        "Computer / Digital Lab": [
+          44,
+          46
+        ],
+        "Theory / Lecture Room": [
+          1,
+          55,
+          65
+        ]
+      },
+      "CSU 07314": {
+        "Computer / Digital Lab": [
+          2,
+          44
+        ],
+        "Theory / Lecture Room": [
+          9,
+          20,
+          58
+        ]
+      },
+      "CSU 07315": {
+        "Theory / Lecture Room": [
+          13,
+          20
+        ]
+      },
+      "CSU 07316/ITU 07316": {
+        "Computer / Digital Lab": [
+          2,
+          46
+        ],
+        "Theory / Lecture Room": [
+          20,
+          58
+        ]
+      },
+      "CSU 07317": {
+        "Computer / Digital Lab": [
+          6
+        ],
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "CSU 07318": {
+        "Computer / Digital Lab": [
+          46,
+          44,
+          2,
+          6
+        ],
+        "Theory / Lecture Room": [
+          14,
+          17,
+          20
+        ]
+      },
+      "CSU 07319/ITU 07319": {
+        "Computer / Digital Lab": [
+          88,
+          44
+        ],
+        "Theory / Lecture Room": [
+          20,
+          58
+        ]
+      },
+      "CSU 08112": {
+        "Theory / Lecture Room": [
+          53,
+          55,
+          56,
+          58
+        ]
+      },
+      "CSU 08114": {
+        "Theory / Lecture Room": [
+          56,
+          54,
+          57,
+          9
+        ]
+      },
+      "EAU 07111": {
+        "Theory / Lecture Room": [
+          1,
+          12,
+          55
+        ]
+      },
+      "EAU 07112": {
+        "Theory / Lecture Room": [
+          3,
+          5
+        ]
+      },
+      "EAU 07113": {
+        "Theory / Lecture Room": [
+          1
+        ]
+      },
+      "EAU 07114": {
+        "Theory / Lecture Room": [
+          4,
+          1,
+          52
+        ]
+      },
+      "EAU 07115": {
+        "Theory / Lecture Room": [
+          1
+        ]
+      },
+      "EAU 07311": {
+        "Theory / Lecture Room": [
+          20,
+          4
+        ]
+      },
+      "EAU 07312": {
+        "Theory / Lecture Room": [
+          4,
+          54
+        ]
+      },
+      "EAU 07313": {
+        "Theory / Lecture Room": [
+          4,
+          1,
+          31
+        ]
+      },
+      "EAU 07314": {
+        "Field / Site": [
+          15
+        ],
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "EAU 07315": {
+        "Theory / Lecture Room": [
+          12,
+          4,
+          54
+        ]
+      },
+      "EAU 07316": {
+        "Theory / Lecture Room": [
+          31,
+          65
+        ]
+      },
+      "EAU 07317": {
+        "Field / Site": [
+          15
+        ],
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "EAU 08111": {
+        "Theory / Lecture Room": [
+          31,
+          65
+        ]
+      },
+      "EAU 08112": {
+        "Theory / Lecture Room": [
+          1,
+          4
+        ]
+      },
+      "EAU 08113": {
+        "Theory / Lecture Room": [
+          20,
+          4
+        ]
+      },
+      "EAU 08114": {
+        "Theory / Lecture Room": [
+          1,
+          4
+        ]
+      },
+      "EAU 08115": {
+        "Theory / Lecture Room": [
+          1,
+          17
+        ]
+      },
+      "EBT 05101": {
+        "Engineering / Science Lab": [
+          40
+        ],
+        "Theory / Lecture Room": [
+          17
+        ]
+      },
+      "EBT 05102": {
+        "Theory / Lecture Room": [
+          13,
+          7
+        ]
+      },
+      "EBT 06101": {
+        "Engineering / Science Lab": [
+          40
+        ],
+        "Theory / Lecture Room": [
+          3
+        ]
+      },
+      "EBT 06103": {
+        "Theory / Lecture Room": [
+          8
+        ]
+      },
+      "EBU 07111": {
+        "Engineering / Science Lab": [
+          41,
+          40
+        ]
+      },
+      "EBU 07311": {
+        "Theory / Lecture Room": [
+          3,
+          54
+        ]
+      },
+      "EBU 08111": {
+        "Theory / Lecture Room": [
+          31,
+          65
+        ]
+      },
+      "EBU 08112": {
+        "Theory / Lecture Room": [
+          4,
+          54
+        ]
+      },
+      "EBU/EEU 08113/REU 08105": {
+        "Theory / Lecture Room": [
+          12
+        ]
+      },
+      "EET 04111/IET 04113": {
+        "Workshop": [
+          35
+        ]
+      },
+      "EET 04113/IET 04114": {
+        "Theory / Lecture Room": [
+          13,
+          54,
+          58
+        ]
+      },
+      "EET 04114/IET 04111": {
+        "Theory / Lecture Room": [
+          13,
+          54
+        ]
+      },
+      "EET 05101/EHT 05111/IET 05115": {
+        "Theory / Lecture Room": [
+          17,
+          13,
+          5
+        ]
+      },
+      "EET 05102": {
+        "Workshop": [
+          38
+        ]
+      },
+      "EET 05103": {
+        "Theory / Lecture Room": [
+          17,
+          65
+        ]
+      },
+      "EET 05104/EHT 05104": {
+        "Theory / Lecture Room": [
+          4,
+          1,
+          12,
+          7
+        ]
+      },
+      "EET 06101/EHT 06114": {
+        "Theory / Lecture Room": [
+          4
+        ]
+      },
+      "EET 06102/IET 06113": {
+        "Engineering / Science Lab": [
+          24
+        ],
+        "Theory / Lecture Room": [
+          17,
+          8
+        ]
+      },
+      "EET 06103/EHT 06115": {
+        "Workshop": [
+          38
+        ]
+      },
+      "EET 06104": {
+        "Theory / Lecture Room": [
+          3,
+          8
+        ]
+      },
+      "EET/ETT/EBT/EHT  06105/IET 06115": {
+        "Theory / Lecture Room": [
+          4
+        ]
+      },
+      "EEU 07301/07511": {
+        "Theory / Lecture Room": [
+          4,
+          52,
+          7
+        ]
+      },
+      "EEU 07512": {
+        "Theory / Lecture Room": [
+          14,
+          31
+        ]
+      },
+      "EHT 05112": {
+        "Theory / Lecture Room": [
+          57
+        ]
+      },
+      "EHT 05113": {
+        "Theory / Lecture Room": [
+          14
+        ],
+        "Workshop": [
+          68
+        ]
+      },
+      "EHT 05114/IET 05113": {
+        "Workshop": [
+          38
+        ]
+      },
+      "EHT 05115": {
+        "Theory / Lecture Room": [
+          57
+        ]
+      },
+      "EHT 05116": {
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "EHT 06111": {
+        "Theory / Lecture Room": [
+          5,
+          54
+        ]
+      },
+      "EHT 06113": {
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "EHT 06116": {
+        "Theory / Lecture Room": [
+          1,
+          12
+        ]
+      },
+      "ERT 04111": {
+        "Theory / Lecture Room": [
+          13,
+          55
+        ]
+      },
+      "ERU 07311": {
+        "Engineering / Science Lab": [
+          49
+        ]
+      },
+      "EST 05105": {
+        "Theory / Lecture Room": [
+          53,
+          65
+        ]
+      },
+      "EST 06101": {
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "ETT 04111": {
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "ETT 04112": {
+        "Engineering / Science Lab": [
+          39
+        ],
+        "Theory / Lecture Room": [
+          58,
+          54
+        ]
+      },
+      "ETT 04212/IET 04115": {
+        "Engineering / Science Lab": [
+          39
+        ],
+        "Theory / Lecture Room": [
+          58,
+          54
+        ]
+      },
+      "ETT 05101/IET 05114": {
+        "Engineering / Science Lab": [
+          91
+        ],
+        "Theory / Lecture Room": [
+          8,
+          17,
+          54
+        ]
+      },
+      "ETT 05102": {
+        "Computer / Digital Lab": [
+          6,
+          2
+        ]
+      },
+      "ETT 05103": {
+        "Engineering / Science Lab": [
+          45
+        ],
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "ETT 05104": {
+        "Engineering / Science Lab": [
+          45
+        ],
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "ETT 06101": {
+        "Engineering / Science Lab": [
+          39
+        ],
+        "Theory / Lecture Room": [
+          3
+        ]
+      },
+      "ETT 06102/EHT/IET 06112": {
+        "Field / Site": [
+          15
+        ],
+        "Theory / Lecture Room": [
+          17
+        ]
+      },
+      "ETT 06103": {
+        "Engineering / Science Lab": [
+          45
+        ],
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "ETT 06104": {
+        "Engineering / Science Lab": [
+          45
+        ],
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "ETU 07111": {
+        "Theory / Lecture Room": [
+          57
+        ],
+        "Workshop": [
+          42
+        ]
+      },
+      "ETU 07311": {
+        "Engineering / Science Lab": [
+          22
+        ],
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "EWT 06103": {
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "GGT 04111": {
+        "Engineering / Science Lab": [
+          33
+        ]
+      },
+      "GGT 04112": {
+        "Engineering / Science Lab": [
+          43
+        ]
+      },
+      "GGT 04114": {
+        "Engineering / Science Lab": [
+          33
+        ],
+        "Field / Site": [
+          28
+        ]
+      },
+      "GGT 04115": {
+        "Engineering / Science Lab": [
+          33
+        ]
+      },
+      "GGT 05111": {
+        "Engineering / Science Lab": [
+          33
+        ]
+      },
+      "GGT 05112": {
+        "Engineering / Science Lab": [
+          43
+        ]
+      },
+      "GGT 05113": {
+        "Engineering / Science Lab": [
+          33
+        ]
+      },
+      "GGT 05114": {
+        "Engineering / Science Lab": [
+          33,
+          43
+        ]
+      },
+      "GGT 06111": {
+        "Engineering / Science Lab": [
+          33
+        ]
+      },
+      "GGT 06112": {
+        "Engineering / Science Lab": [
+          33,
+          43
+        ]
+      },
+      "GGT 06113": {
+        "Engineering / Science Lab": [
+          33
+        ]
+      },
+      "GGT 06114": {
+        "Engineering / Science Lab": [
+          33
+        ],
+        "Field / Site": [
+          87
+        ]
+      },
+      "GGT 06115": {
+        "Engineering / Science Lab": [
+          33
+        ]
+      },
+      "GST 04111": {
+        "Theory / Lecture Room": [
+          1,
+          17,
+          13,
+          56,
+          58,
+          5,
+          55
+        ]
+      },
+      "GST 04112": {
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "GST 04113": {
+        "Theory / Lecture Room": [
+          1
+        ]
+      },
+      "GST 05101/GST 05111": {
+        "Theory / Lecture Room": [
+          65
+        ]
+      },
+      "GST 05102": {
+        "Theory / Lecture Room": [
+          13,
+          17,
+          5
+        ]
+      },
+      "GST 05111/05101/05105": {
+        "Theory / Lecture Room": [
+          1,
+          13,
+          17
+        ]
+      },
+      "GST 05112": {
+        "Theory / Lecture Room": [
+          1
+        ]
+      },
+      "GST 05112/05102": {
+        "Theory / Lecture Room": [
+          1,
+          54,
+          8
+        ]
+      },
+      "GST 05113/05103": {
+        "Field / Site": [
+          15
+        ],
+        "Theory / Lecture Room": [
+          17,
+          1,
+          58,
+          65,
+          25,
+          3
+        ]
+      },
+      "GST 06101": {
+        "Engineering / Science Lab": [
+          22,
+          59
+        ],
+        "Theory / Lecture Room": [
+          1,
+          8
+        ]
+      },
+      "GST 06102": {
+        "Engineering / Science Lab": [
+          22
+        ],
+        "Theory / Lecture Room": [
+          57
+        ]
+      },
+      "GST 06103": {
+        "Theory / Lecture Room": [
+          1,
+          8
+        ]
+      },
+      "GST 06106": {
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "GST05101": {
+        "Engineering / Science Lab": [
+          36
+        ]
+      },
+      "GSU 07101": {
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "GSU 07103": {
+        "Theory / Lecture Room": [
+          12,
+          65
+        ]
+      },
+      "GSU 07104": {
+        "Theory / Lecture Room": [
+          51,
+          16,
+          3
+        ]
+      },
+      "GSU 07112": {
+        "Theory / Lecture Room": [
+          1
+        ]
+      },
+      "GSU 07301": {
+        "Theory / Lecture Room": [
+          14,
+          55
+        ]
+      },
+      "GSU 07302": {
+        "Theory / Lecture Room": [
+          14,
+          65
+        ]
+      },
+      "GSU 07311": {
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "GSU 07311/07111": {
+        "Theory / Lecture Room": [
+          12,
+          13,
+          3,
+          56,
+          8
+        ]
+      },
+      "GSU 07312": {
+        "Theory / Lecture Room": [
+          31,
+          54
+        ]
+      },
+      "GSU 07313/07113": {
+        "Theory / Lecture Room": [
+          55,
+          12,
+          13,
+          4,
+          51,
+          8,
+          1
+        ]
+      },
+      "GSU 07314/ 07114": {
+        "Theory / Lecture Room": [
+          3,
+          12,
+          17,
+          58
+        ]
+      },
+      "GSU 07511/07311": {
+        "Theory / Lecture Room": [
+          3,
+          5,
+          51,
+          58,
+          8
+        ]
+      },
+      "GSU 08103": {
+        "Theory / Lecture Room": [
+          52
+        ]
+      },
+      "HET 04111": {
+        "Theory / Lecture Room": [
+          65
+        ],
+        "Workshop": [
+          42
+        ]
+      },
+      "HET 04112": {
+        "Theory / Lecture Room": [
+          12
+        ],
+        "Workshop": [
+          42
+        ]
+      },
+      "HET 05101": {
+        "Theory / Lecture Room": [
+          16
+        ],
+        "Workshop": [
+          42
+        ]
+      },
+      "HET 06101": {
+        "Engineering / Science Lab": [
+          22
+        ]
+      },
+      "HET 06102": {
+        "Engineering / Science Lab": [
+          22
+        ],
+        "Workshop": [
+          42
+        ]
+      },
+      "IET 04112": {
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "IET 05111": {
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "IET 05112": {
+        "Engineering / Science Lab": [
+          47
+        ],
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "IET 05116": {
+        "Theory / Lecture Room": [
+          57
+        ]
+      },
+      "IET 06111": {
+        "Theory / Lecture Room": [
+          14,
+          20
+        ]
+      },
+      "IET 06114": {
+        "Theory / Lecture Room": [
+          14,
+          5
+        ]
+      },
+      "ITT 04111/MAT 04111": {
+        "Computer / Digital Lab": [
+          2,
+          46
+        ],
+        "Theory / Lecture Room": [
+          58
+        ]
+      },
+      "ITT 04113/CDT 04111": {
+        "Engineering / Science Lab": [
+          41
+        ]
+      },
+      "ITT 04117": {
+        "Theory / Lecture Room": [
+          16,
+          56,
+          57,
+          58,
+          14,
+          25,
+          52,
+          9
+        ]
+      },
+      "ITT 05101": {
+        "Computer / Digital Lab": [
+          46,
+          6
+        ],
+        "Theory / Lecture Room": [
+          58,
+          54,
+          65
+        ]
+      },
+      "ITT 05103": {
+        "Computer / Digital Lab": [
+          44,
+          88
+        ],
+        "Theory / Lecture Room": [
+          3,
+          53
+        ]
+      },
+      "ITT 05104/CDT 05111/MAT 5113": {
+        "Computer / Digital Lab": [
+          2
+        ],
+        "Theory / Lecture Room": [
+          13,
+          17,
+          58
+        ]
+      },
+      "ITT 06102/MAT 6116": {
+        "Computer / Digital Lab": [
+          46,
+          6
+        ],
+        "Theory / Lecture Room": [
+          13
+        ]
+      },
+      "ITT 06104": {
+        "Computer / Digital Lab": [
+          2
+        ],
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "ITT 06105": {
+        "Theory / Lecture Room": [
+          8
+        ]
+      },
+      "ITU 07112": {
+        "Computer / Digital Lab": [
+          6
+        ],
+        "Field / Site": [
+          15
+        ]
+      },
+      "ITU 07113": {
+        "Computer / Digital Lab": [
+          6,
+          44,
+          2
+        ],
+        "Theory / Lecture Room": [
+          20,
+          55,
+          58
+        ]
+      },
+      "ITU 07114": {
+        "Computer / Digital Lab": [
+          2,
+          44
+        ],
+        "Theory / Lecture Room": [
+          14,
+          17,
+          20
+        ]
+      },
+      "ITU 08111": {
+        "Computer / Digital Lab": [
+          44,
+          6
+        ],
+        "Theory / Lecture Room": [
+          14
+        ]
+      },
+      "ITU 08111/CSU 08115": {
+        "Computer / Digital Lab": [
+          44
+        ],
+        "Theory / Lecture Room": [
+          20,
+          3
+        ]
+      },
+      "ITU 08112/CSU 08111": {
+        "Computer / Digital Lab": [
+          6,
+          88
+        ],
+        "Theory / Lecture Room": [
+          20,
+          3
+        ]
+      },
+      "ITU 08113": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          12,
+          17,
+          65
+        ]
+      },
+      "ITU 08114": {
+        "Computer / Digital Lab": [
+          2,
+          88
+        ],
+        "Theory / Lecture Room": [
+          54,
+          65
+        ]
+      },
+      "ITU 08115": {
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "ITU 08116": {
+        "Computer / Digital Lab": [
+          46
+        ]
+      },
+      "LIU 07101": {
+        "Engineering / Science Lab": [
+          34
+        ],
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "LIU 07102": {
+        "Engineering / Science Lab": [
+          60
+        ],
+        "Theory / Lecture Room": [
+          56
+        ]
+      },
+      "LIU 07103": {
+        "Engineering / Science Lab": [
+          36
+        ],
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "LIU 07104": {
+        "Engineering / Science Lab": [
+          34
+        ],
+        "Theory / Lecture Room": [
+          7
+        ]
+      },
+      "LIU 07301": {
+        "Theory / Lecture Room": [
+          56
+        ]
+      },
+      "LIU 07302": {
+        "Engineering / Science Lab": [
+          34
+        ],
+        "Theory / Lecture Room": [
+          56
+        ]
+      },
+      "LIU 07303": {
+        "Engineering / Science Lab": [
+          34
+        ],
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "LIU 07304": {
+        "Engineering / Science Lab": [
+          39
+        ],
+        "Theory / Lecture Room": [
+          56
+        ]
+      },
+      "LIU 07305": {
+        "Engineering / Science Lab": [
+          59
+        ],
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "LIU 08101": {
+        "Engineering / Science Lab": [
+          36
+        ]
+      },
+      "LIU 08102": {
+        "Engineering / Science Lab": [
+          36
+        ]
+      },
+      "LIU 08103": {
+        "Engineering / Science Lab": [
+          36,
+          59
+        ]
+      },
+      "LIU 08104": {
+        "Engineering / Science Lab": [
+          36
+        ]
+      },
+      "LIU 08105": {
+        "Engineering / Science Lab": [
+          34,
+          36
+        ]
+      },
+      "LST 04111": {
+        "Engineering / Science Lab": [
+          36,
+          59
+        ]
+      },
+      "LST 04112": {
+        "Engineering / Science Lab": [
+          34,
+          36
+        ]
+      },
+      "LST 04113": {
+        "Engineering / Science Lab": [
+          34,
+          36
+        ]
+      },
+      "LST 04114": {
+        "Engineering / Science Lab": [
+          36
+        ]
+      },
+      "LST 04115": {
+        "Engineering / Science Lab": [
+          36
+        ]
+      },
+      "LST 04116": {
+        "Engineering / Science Lab": [
+          36
+        ]
+      },
+      "LST 04117": {
+        "Engineering / Science Lab": [
+          34,
+          36
+        ]
+      },
+      "LST 05101": {
+        "Engineering / Science Lab": [
+          36,
+          59
+        ]
+      },
+      "LST 05102": {
+        "Engineering / Science Lab": [
+          59
+        ]
+      },
+      "LST 05103": {
+        "Engineering / Science Lab": [
+          59
+        ]
+      },
+      "LST 05104": {
+        "Engineering / Science Lab": [
+          59,
+          36
+        ]
+      },
+      "LST 05105": {
+        "Engineering / Science Lab": [
+          59
+        ]
+      },
+      "LST 05106": {
+        "Engineering / Science Lab": [
+          34,
+          59
+        ]
+      },
+      "LST 06101": {
+        "Engineering / Science Lab": [
+          59
+        ],
+        "Theory / Lecture Room": [
+          16
+        ]
+      },
+      "LST 06102": {
+        "Engineering / Science Lab": [
+          39
+        ]
+      },
+      "LST 06103": {
+        "Engineering / Science Lab": [
+          60,
+          59
+        ]
+      },
+      "LST 06104": {
+        "Engineering / Science Lab": [
+          59
+        ],
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "LST 06105": {
+        "Engineering / Science Lab": [
+          34
+        ],
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "LST 06107": {
+        "Engineering / Science Lab": [
+          59
+        ],
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "MAT 04112": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          3,
+          52
+        ]
+      },
+      "MAT 04113": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          14
+        ]
+      },
+      "MAT 04114": {
+        "Computer / Digital Lab": [
+          44
+        ],
+        "Theory / Lecture Room": [
+          52
+        ]
+      },
+      "MAT 06111": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          52
+        ]
+      },
+      "MAT 06112": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          52
+        ]
+      },
+      "MAT 06113": {
+        "Computer / Digital Lab": [
+          44
+        ],
+        "Theory / Lecture Room": [
+          52
+        ]
+      },
+      "MAT 06114": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          52
+        ]
+      },
+      "MAT 5111": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "MAT 5112": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "MAT 5114": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "MAT 5115": {
+        "Theory / Lecture Room": [
+          54
+        ]
+      },
+      "MAT 5116": {
+        "Computer / Digital Lab": [
+          44
+        ],
+        "Theory / Lecture Room": [
+          55
+        ]
+      },
+      "MAT 5117": {
+        "Computer / Digital Lab": [
+          88
+        ],
+        "Theory / Lecture Room": [
+          53
+        ]
+      },
+      "MET 04111": {
+        "Theory / Lecture Room": [
+          56
+        ]
+      },
+      "MET 04112": {
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "MET 04113": {
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "MET 04115/PWT 04113": {
+        "Theory / Lecture Room": [
+          7
+        ],
+        "Workshop": [
+          37,
+          10
+        ]
+      },
+      "MET 04116/GGT 04113": {
+        "Theory / Lecture Room": [
+          7
+        ]
+      },
+      "MET 05101": {
+        "Theory / Lecture Room": [
+          12
+        ]
+      },
+      "MET 05111": {
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "MET 05112/AUT 05113/MET 05106": {
+        "Field / Site": [
+          15
+        ]
+      },
+      "MET 05113": {
+        "Theory / Lecture Room": [
+          7
+        ]
+      },
+      "MET 05114/AUT 05115/MET 05107": {
+        "Field / Site": [
+          15
+        ]
+      },
+      "MET 05115/MET 05103": {
+        "Theory / Lecture Room": [
+          51
+        ],
+        "Workshop": [
+          68
+        ]
+      },
+      "MET 06102": {
+        "Engineering / Science Lab": [
+          22
+        ],
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "MET 06106": {
+        "Engineering / Science Lab": [
+          22
+        ]
+      },
+      "MET 06111/AUT 06111": {
+        "Field / Site": [
+          15
+        ]
+      },
+      "MET 06112": {
+        "Engineering / Science Lab": [
+          47
+        ],
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "MET 06113/PWT 06113": {
+        "Theory / Lecture Room": [
+          9
+        ],
+        "Workshop": [
+          68
+        ]
+      },
+      "MET 06114": {
+        "Theory / Lecture Room": [
+          65
+        ]
+      },
+      "MET 06115": {
+        "Theory / Lecture Room": [
+          52,
+          9
+        ]
+      },
+      "MET 06116": {
+        "Theory / Lecture Room": [
+          51
+        ]
+      },
+      "MET 06117/PWT 06112/GGT 06117": {
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "MEU 07111": {
+        "Field / Site": [
+          15
+        ],
+        "Theory / Lecture Room": [
+          20
+        ]
+      },
+      "MEU 07111/MEU 07311": {
+        "Theory / Lecture Room": [
+          1
+        ]
+      },
+      "MEU 07112": {
+        "Theory / Lecture Room": [
+          18
+        ]
+      },
+      "MEU 07113": {
+        "Field / Site": [
+          15
+        ],
+        "Workshop": [
+          37
+        ]
+      },
+      "MEU 07311": {
+        "Theory / Lecture Room": [
+          18,
+          5
+        ]
+      },
+      "MEU 07312": {
+        "Theory / Lecture Room": [
+          7,
+          14
+        ]
+      },
+      "MEU 07313": {
+        "Theory / Lecture Room": [
+          14,
+          7
+        ]
+      },
+      "MEU 07314": {
+        "Theory / Lecture Room": [
+          56,
+          9
+        ]
+      },
+      "MEU 07315": {
+        "Computer / Digital Lab": [
+          64
+        ],
+        "Theory / Lecture Room": [
+          18
+        ]
+      },
+      "MEU 07511": {
+        "Theory / Lecture Room": [
+          18,
+          5
+        ]
+      },
+      "MEU 07512": {
+        "Field / Site": [
+          15
+        ],
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "MEU 07513": {
+        "Computer / Digital Lab": [
+          23
+        ],
+        "Theory / Lecture Room": [
+          14,
+          18
+        ]
+      },
+      "MEU 07514": {
+        "Theory / Lecture Room": [
+          18,
+          57
+        ]
+      },
+      "MEU 07515": {
+        "Theory / Lecture Room": [
+          56,
+          14
+        ]
+      },
+      "MEU 07516": {
+        "Theory / Lecture Room": [
+          12,
+          7
+        ]
+      },
+      "MEU 08111": {
+        "Theory / Lecture Room": [
+          3
+        ]
+      },
+      "MEU 08112": {
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "MEU 08113": {
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "MEU 08114": {
+        "Engineering / Science Lab": [
+          47
+        ],
+        "Theory / Lecture Room": [
+          56
+        ]
+      },
+      "MEU 08115": {
+        "Theory / Lecture Room": [
+          18
+        ]
+      },
+      "MEU 08116": {
+        "Theory / Lecture Room": [
+          18
+        ]
+      },
+      "MEU 08117": {
+        "Engineering / Science Lab": [
+          21
+        ],
+        "Theory / Lecture Room": [
+          65
+        ]
+      },
+      "MEU 08118/MMU 08113": {
+        "Theory / Lecture Room": [
+          31
+        ]
+      },
+      "MMU 07112": {
+        "Engineering / Science Lab": [
+          47
+        ],
+        "Field / Site": [
+          15
+        ]
+      },
+      "MMU 07113": {
+        "Theory / Lecture Room": [
+          18
+        ],
+        "Workshop": [
+          35
+        ]
+      },
+      "MMU 07311": {
+        "Theory / Lecture Room": [
+          52,
+          65
+        ]
+      },
+      "MMU 07312": {
+        "Theory / Lecture Room": [
+          12,
+          65
+        ]
+      },
+      "MMU 07511": {
+        "Theory / Lecture Room": [
+          16,
+          65
+        ]
+      },
+      "MMU 07512": {
+        "Theory / Lecture Room": [
+          16,
+          65
+        ]
+      },
+      "MMU 07513": {
+        "Theory / Lecture Room": [
+          12,
+          65
+        ]
+      },
+      "MMU 08110": {
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "MMU 08111": {
+        "Theory / Lecture Room": [
+          5
+        ]
+      },
+      "PWT 04111": {
+        "Engineering / Science Lab": [
+          43
+        ],
+        "Workshop": [
+          27
+        ]
+      },
+      "PWT 04112": {
+        "Theory / Lecture Room": [
+          12
+        ]
+      },
+      "PWT 05111": {
+        "Theory / Lecture Room": [
+          5
+        ],
+        "Workshop": [
+          27
+        ]
+      },
+      "PWT 05112": {
+        "Theory / Lecture Room": [
+          12
+        ],
+        "Workshop": [
+          27
+        ]
+      },
+      "PWT 05113": {
+        "Theory / Lecture Room": [
+          12
+        ],
+        "Workshop": [
+          27
+        ]
+      },
+      "PWT 06111": {
+        "Theory / Lecture Room": [
+          12
+        ]
+      },
+      "REU 07301": {
+        "Engineering / Science Lab": [
+          49
+        ]
+      },
+      "REU 07302": {
+        "Theory / Lecture Room": [
+          52
+        ]
+      },
+      "REU 08101": {
+        "Theory / Lecture Room": [
+          52
+        ]
+      },
+      "REU 08102": {
+        "Computer / Digital Lab": [
+          64
+        ]
+      },
+      "REU 08103": {
+        "Theory / Lecture Room": [
+          52
+        ]
+      },
+      "REU 08104": {
+        "Theory / Lecture Room": [
+          9
+        ]
+      },
+      "SHC 0001": {
+        "Computer / Digital Lab": [
+          44
+        ]
+      }
+    },
+    "by_module_prefix": {
+      "AET": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            64
+          ],
+          "venue_names": [
+            "Simulation  Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            21,
+            22
+          ],
+          "venue_names": [
+            "Automotive Electronics Lab",
+            "Argo Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            12,
+            3,
+            5
+          ],
+          "venue_names": [
+            "Room T11",
+            "Room S10",
+            "Room 11"
+          ]
+        }
+      },
+      "AEU": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            64
+          ],
+          "venue_names": [
+            "Simulation  Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            22,
+            21
+          ],
+          "venue_names": [
+            "Argo Lab",
+            "Automotive Electronics Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            14,
+            57,
+            9,
+            55,
+            53,
+            52
+          ],
+          "venue_names": [
+            "Room S07",
+            "Room S06",
+            "US-01",
+            "Room T12",
+            "Room 24",
+            "UT-01"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            42
+          ],
+          "venue_names": [
+            "Automotive W/S1"
+          ]
+        }
+      },
+      "AUT": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            64
+          ],
+          "venue_names": [
+            "Simulation  Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            22
+          ],
+          "venue_names": [
+            "Argo Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            18,
+            12,
+            31,
+            9,
+            5,
+            51,
+            56
+          ],
+          "venue_names": [
+            "UF-01",
+            "Room T11",
+            "Room 06",
+            "US-01",
+            "Room 11",
+            "Room F12",
+            "Room T10"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            42,
+            63
+          ],
+          "venue_names": [
+            "Automotive W/S1",
+            "Automotive W/S2"
+          ]
+        }
+      },
+      "CAT": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            2,
+            6
+          ],
+          "venue_names": [
+            "Comp R22/23 Lab",
+            "Comp R32/33 Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            28,
+            15
+          ],
+          "venue_names": [
+            "Survey-Site",
+            "Highway"
+          ]
+        },
+        "Studio": {
+          "allowed_venue_ids": [
+            86
+          ],
+          "venue_names": [
+            "Studio I (F06/07)"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            53,
+            55,
+            16,
+            7,
+            8,
+            58
+          ],
+          "venue_names": [
+            "Room 24",
+            "Room T12",
+            "Room 34",
+            "Room G11",
+            "Exercutive Room",
+            "Room 12/13"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            50
+          ],
+          "venue_names": [
+            "Carpentry W/S"
+          ]
+        }
+      },
+      "CDD": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            88,
+            44,
+            46
+          ],
+          "venue_names": [
+            "Comp R21 Lab",
+            "Comp R31 Lab",
+            "Comp R42 Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            54,
+            16,
+            20,
+            58,
+            65
+          ],
+          "venue_names": [
+            "Room 14",
+            "Room 34",
+            "Room T06",
+            "Room 12/13",
+            "MASONRY"
+          ]
+        }
+      },
+      "CDT": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            6,
+            2
+          ],
+          "venue_names": [
+            "Comp R32/33 Lab",
+            "Comp R22/23 Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            41
+          ],
+          "venue_names": [
+            "Biomedical Lab1"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            31,
+            13,
+            17,
+            58,
+            56,
+            8
+          ],
+          "venue_names": [
+            "Room 06",
+            "UF-05",
+            "UG-06",
+            "Room 12/13",
+            "Room T10",
+            "Exercutive Room"
+          ]
+        }
+      },
+      "CED": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            6
+          ],
+          "venue_names": [
+            "Comp R32/33 Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Studio": {
+          "allowed_venue_ids": [
+            86
+          ],
+          "venue_names": [
+            "Studio I (F06/07)"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            7,
+            18,
+            58
+          ],
+          "venue_names": [
+            "Room G11",
+            "UF-01",
+            "Room 12/13"
+          ]
+        }
+      },
+      "CET": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            2
+          ],
+          "venue_names": [
+            "Comp R22/23 Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            61,
+            60
+          ],
+          "venue_names": [
+            "Soil and Bitumen Lab",
+            "Water Quality Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            28,
+            15
+          ],
+          "venue_names": [
+            "Survey-Site",
+            "Highway"
+          ]
+        },
+        "Studio": {
+          "allowed_venue_ids": [
+            86
+          ],
+          "venue_names": [
+            "Studio I (F06/07)"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            8,
+            3,
+            18
+          ],
+          "venue_names": [
+            "Exercutive Room",
+            "Room S10",
+            "UF-01"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            50,
+            26
+          ],
+          "venue_names": [
+            "Carpentry W/S",
+            "ACCT W/S"
+          ]
+        }
+      },
+      "CEU": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            29,
+            61
+          ],
+          "venue_names": [
+            "Hydraulics Lab",
+            "Soil and Bitumen Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            28
+          ],
+          "venue_names": [
+            "Survey-Site"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            51,
+            18,
+            5,
+            7,
+            9,
+            20,
+            3,
+            31,
+            56
+          ],
+          "venue_names": [
+            "Room F12",
+            "UF-01",
+            "Room 11",
+            "Room G11",
+            "US-01",
+            "Room T06",
+            "Room S10",
+            "Room 06",
+            "Room T10"
+          ]
+        }
+      },
+      "CHT": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            2
+          ],
+          "venue_names": [
+            "Comp R22/23 Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            61,
+            60
+          ],
+          "venue_names": [
+            "Soil and Bitumen Lab",
+            "Water Quality Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15,
+            28
+          ],
+          "venue_names": [
+            "Highway",
+            "Survey-Site"
+          ]
+        },
+        "Studio": {
+          "allowed_venue_ids": [
+            86
+          ],
+          "venue_names": [
+            "Studio I (F06/07)"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            8,
+            20,
+            65,
+            14,
+            3,
+            12,
+            5,
+            58
+          ],
+          "venue_names": [
+            "Exercutive Room",
+            "Room T06",
+            "MASONRY",
+            "Room S07",
+            "Room S10",
+            "Room T11",
+            "Room 11",
+            "Room 12/13"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            50
+          ],
+          "venue_names": [
+            "Carpentry W/S"
+          ]
+        }
+      },
+      "CHU": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            61,
+            29
+          ],
+          "venue_names": [
+            "Soil and Bitumen Lab",
+            "Hydraulics Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            28
+          ],
+          "venue_names": [
+            "Survey-Site"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            20,
+            18,
+            51,
+            65,
+            7,
+            3,
+            56,
+            12,
+            31,
+            52,
+            55,
+            57
+          ],
+          "venue_names": [
+            "Room T06",
+            "UF-01",
+            "Room F12",
+            "MASONRY",
+            "Room G11",
+            "Room S10",
+            "Room T10",
+            "Room T11",
+            "Room 06",
+            "UT-01",
+            "Room T12",
+            "Room S06"
+          ]
+        }
+      },
+      "CID": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            29
+          ],
+          "venue_names": [
+            "Hydraulics Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            14,
+            53,
+            55,
+            7,
+            58
+          ],
+          "venue_names": [
+            "Room S07",
+            "Room 24",
+            "Room T12",
+            "Room G11",
+            "Room 12/13"
+          ]
+        }
+      },
+      "CIT": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            2
+          ],
+          "venue_names": [
+            "Comp R22/23 Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            61,
+            60
+          ],
+          "venue_names": [
+            "Soil and Bitumen Lab",
+            "Water Quality Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            28,
+            15
+          ],
+          "venue_names": [
+            "Survey-Site",
+            "Highway"
+          ]
+        },
+        "Studio": {
+          "allowed_venue_ids": [
+            86
+          ],
+          "venue_names": [
+            "Studio I (F06/07)"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            8,
+            3,
+            53,
+            16
+          ],
+          "venue_names": [
+            "Exercutive Room",
+            "Room S10",
+            "Room 24",
+            "Room 34"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            50
+          ],
+          "venue_names": [
+            "Carpentry W/S"
+          ]
+        }
+      },
+      "CIU": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            29,
+            61
+          ],
+          "venue_names": [
+            "Hydraulics Lab",
+            "Soil and Bitumen Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            28
+          ],
+          "venue_names": [
+            "Survey-Site"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            51,
+            18,
+            5,
+            53,
+            7,
+            9,
+            12,
+            14,
+            16,
+            3,
+            31
+          ],
+          "venue_names": [
+            "Room F12",
+            "UF-01",
+            "Room 11",
+            "Room 24",
+            "Room G11",
+            "US-01",
+            "Room T11",
+            "Room S07",
+            "Room 34",
+            "Room S10",
+            "Room 06"
+          ]
+        }
+      },
+      "CST": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            6,
+            2,
+            46,
+            88
+          ],
+          "venue_names": [
+            "Comp R32/33 Lab",
+            "Comp R22/23 Lab",
+            "Comp R42 Lab",
+            "Comp R21 Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            58,
+            7,
+            56,
+            14,
+            16,
+            52,
+            55,
+            8
+          ],
+          "venue_names": [
+            "Room 12/13",
+            "Room G11",
+            "Room T10",
+            "Room S07",
+            "Room 34",
+            "UT-01",
+            "Room T12",
+            "Exercutive Room"
+          ]
+        }
+      },
+      "CSU": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            2,
+            44,
+            46,
+            6,
+            88
+          ],
+          "venue_names": [
+            "Comp R22/23 Lab",
+            "Comp R31 Lab",
+            "Comp R42 Lab",
+            "Comp R32/33 Lab",
+            "Comp R21 Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            41
+          ],
+          "venue_names": [
+            "Biomedical Lab1"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            20,
+            17,
+            58,
+            56,
+            9,
+            13,
+            53,
+            57,
+            1,
+            14,
+            3,
+            54,
+            55,
+            5,
+            52,
+            65
+          ],
+          "venue_names": [
+            "Room T06",
+            "UG-06",
+            "Room 12/13",
+            "Room T10",
+            "US-01",
+            "UF-05",
+            "Room 24",
+            "Room S06",
+            "UG-07",
+            "Room S07",
+            "Room S10",
+            "Room 14",
+            "Room T12",
+            "Room 11",
+            "UT-01",
+            "MASONRY"
+          ]
+        }
+      },
+      "EAU": {
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            1,
+            4,
+            20,
+            12,
+            31,
+            5,
+            54,
+            65,
+            17,
+            3,
+            52,
+            55
+          ],
+          "venue_names": [
+            "UG-07",
+            "US-02",
+            "Room T06",
+            "Room T11",
+            "Room 06",
+            "Room 11",
+            "Room 14",
+            "MASONRY",
+            "UG-06",
+            "Room S10",
+            "UT-01",
+            "Room T12"
+          ]
+        }
+      },
+      "EBT": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            40
+          ],
+          "venue_names": [
+            "Biomedical Lab2"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            17,
+            4,
+            8,
+            13,
+            3,
+            7
+          ],
+          "venue_names": [
+            "UG-06",
+            "US-02",
+            "Exercutive Room",
+            "UF-05",
+            "Room S10",
+            "Room G11"
+          ]
+        }
+      },
+      "EBU": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            41,
+            40
+          ],
+          "venue_names": [
+            "Biomedical Lab1",
+            "Biomedical Lab2"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            54,
+            3,
+            31,
+            4,
+            65,
+            12
+          ],
+          "venue_names": [
+            "Room 14",
+            "Room S10",
+            "Room 06",
+            "US-02",
+            "MASONRY",
+            "Room T11"
+          ]
+        }
+      },
+      "EET": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            24
+          ],
+          "venue_names": [
+            "Automation Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            17,
+            13,
+            4,
+            54,
+            8,
+            3,
+            5,
+            58,
+            65,
+            1,
+            12,
+            7
+          ],
+          "venue_names": [
+            "UG-06",
+            "UF-05",
+            "US-02",
+            "Room 14",
+            "Exercutive Room",
+            "Room S10",
+            "Room 11",
+            "Room 12/13",
+            "MASONRY",
+            "UG-07",
+            "Room T11",
+            "Room G11"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            38,
+            35
+          ],
+          "venue_names": [
+            "Electrical W/S1",
+            "Electrical W/S2"
+          ]
+        }
+      },
+      "EEU": {
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            4,
+            14,
+            31,
+            52,
+            7,
+            12
+          ],
+          "venue_names": [
+            "US-02",
+            "Room S07",
+            "Room 06",
+            "UT-01",
+            "Room G11",
+            "Room T11"
+          ]
+        }
+      },
+      "EHT": {
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            4,
+            17,
+            57,
+            5,
+            54,
+            1,
+            12,
+            13,
+            55,
+            14,
+            7
+          ],
+          "venue_names": [
+            "US-02",
+            "UG-06",
+            "Room S06",
+            "Room 11",
+            "Room 14",
+            "UG-07",
+            "Room T11",
+            "UF-05",
+            "Room T12",
+            "Room S07",
+            "Room G11"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            38,
+            68
+          ],
+          "venue_names": [
+            "Electrical W/S1",
+            "Mechanical W/S1-Welding"
+          ]
+        }
+      },
+      "ERT": {
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            13,
+            55
+          ],
+          "venue_names": [
+            "UF-05",
+            "Room T12"
+          ]
+        }
+      },
+      "ERU": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            49
+          ],
+          "venue_names": [
+            "Solar/Wind Lab"
+          ]
+        }
+      },
+      "EST": {
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            5,
+            53,
+            65
+          ],
+          "venue_names": [
+            "Room 11",
+            "Room 24",
+            "MASONRY"
+          ]
+        }
+      },
+      "ETT": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            6,
+            2
+          ],
+          "venue_names": [
+            "Comp R32/33 Lab",
+            "Comp R22/23 Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            39,
+            45,
+            91
+          ],
+          "venue_names": [
+            "Electronics Lab4",
+            "Telcom Lab",
+            "electronics lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            54,
+            58,
+            17,
+            3,
+            4,
+            8,
+            53
+          ],
+          "venue_names": [
+            "Room 14",
+            "Room 12/13",
+            "UG-06",
+            "Room S10",
+            "US-02",
+            "Exercutive Room",
+            "Room 24"
+          ]
+        }
+      },
+      "ETU": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            22
+          ],
+          "venue_names": [
+            "Argo Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            57,
+            9
+          ],
+          "venue_names": [
+            "Room S06",
+            "US-01"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            42
+          ],
+          "venue_names": [
+            "Automotive W/S1"
+          ]
+        }
+      },
+      "EWT": {
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            9
+          ],
+          "venue_names": [
+            "US-01"
+          ]
+        }
+      },
+      "GGT": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            33,
+            43
+          ],
+          "venue_names": [
+            "M2A Lab",
+            "M2B Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            28,
+            87
+          ],
+          "venue_names": [
+            "Survey-Site",
+            "Geology-Site"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            7,
+            31
+          ],
+          "venue_names": [
+            "Room G11",
+            "Room 06"
+          ]
+        }
+      },
+      "GST": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            22,
+            36,
+            59
+          ],
+          "venue_names": [
+            "Argo Lab",
+            "Chemistry Lab",
+            "Physics Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            1,
+            17,
+            13,
+            8,
+            54,
+            58,
+            65,
+            5,
+            56,
+            9,
+            25,
+            3,
+            55,
+            57
+          ],
+          "venue_names": [
+            "UG-07",
+            "UG-06",
+            "UF-05",
+            "Exercutive Room",
+            "Room 14",
+            "Room 12/13",
+            "MASONRY",
+            "Room 11",
+            "Room T10",
+            "US-01",
+            "Room 44",
+            "Room S10",
+            "Room T12",
+            "Room S06"
+          ]
+        }
+      },
+      "GSU": {
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            3,
+            51,
+            12,
+            8,
+            13,
+            31,
+            55,
+            58,
+            1,
+            14,
+            17,
+            4,
+            5,
+            52,
+            54,
+            56,
+            65,
+            16
+          ],
+          "venue_names": [
+            "Room S10",
+            "Room F12",
+            "Room T11",
+            "Exercutive Room",
+            "UF-05",
+            "Room 06",
+            "Room T12",
+            "Room 12/13",
+            "UG-07",
+            "Room S07",
+            "UG-06",
+            "US-02",
+            "Room 11",
+            "UT-01",
+            "Room 14",
+            "Room T10",
+            "MASONRY",
+            "Room 34"
+          ]
+        }
+      },
+      "HET": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            64
+          ],
+          "venue_names": [
+            "Simulation  Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            22
+          ],
+          "venue_names": [
+            "Argo Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            12,
+            16,
+            65
+          ],
+          "venue_names": [
+            "Room T11",
+            "Room 34",
+            "MASONRY"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            42
+          ],
+          "venue_names": [
+            "Automotive W/S1"
+          ]
+        }
+      },
+      "IET": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            39,
+            91,
+            24,
+            47
+          ],
+          "venue_names": [
+            "Electronics Lab4",
+            "electronics lab",
+            "Automation Lab",
+            "Mechatronics Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            13,
+            17,
+            54,
+            5,
+            58,
+            55,
+            8,
+            14,
+            4,
+            57,
+            20
+          ],
+          "venue_names": [
+            "UF-05",
+            "UG-06",
+            "Room 14",
+            "Room 11",
+            "Room 12/13",
+            "Room T12",
+            "Exercutive Room",
+            "Room S07",
+            "US-02",
+            "Room S06",
+            "Room T06"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            35,
+            38
+          ],
+          "venue_names": [
+            "Electrical W/S2",
+            "Electrical W/S1"
+          ]
+        }
+      },
+      "ITT": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            46,
+            2,
+            6,
+            44,
+            88
+          ],
+          "venue_names": [
+            "Comp R42 Lab",
+            "Comp R22/23 Lab",
+            "Comp R32/33 Lab",
+            "Comp R31 Lab",
+            "Comp R21 Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            41
+          ],
+          "venue_names": [
+            "Biomedical Lab1"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            58,
+            13,
+            8,
+            9,
+            16,
+            17,
+            56,
+            57,
+            7,
+            14,
+            25,
+            3,
+            52,
+            53,
+            54,
+            65
+          ],
+          "venue_names": [
+            "Room 12/13",
+            "UF-05",
+            "Exercutive Room",
+            "US-01",
+            "Room 34",
+            "UG-06",
+            "Room T10",
+            "Room S06",
+            "Room G11",
+            "Room S07",
+            "Room 44",
+            "Room S10",
+            "UT-01",
+            "Room 24",
+            "Room 14",
+            "MASONRY"
+          ]
+        }
+      },
+      "ITU": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            44,
+            2,
+            88,
+            6,
+            46
+          ],
+          "venue_names": [
+            "Comp R31 Lab",
+            "Comp R22/23 Lab",
+            "Comp R21 Lab",
+            "Comp R32/33 Lab",
+            "Comp R42 Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            20,
+            54,
+            14,
+            58,
+            17,
+            3,
+            65,
+            12,
+            55
+          ],
+          "venue_names": [
+            "Room T06",
+            "Room 14",
+            "Room S07",
+            "Room 12/13",
+            "UG-06",
+            "Room S10",
+            "MASONRY",
+            "Room T11",
+            "Room T12"
+          ]
+        }
+      },
+      "LIU": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            36,
+            34,
+            59,
+            39,
+            60
+          ],
+          "venue_names": [
+            "Chemistry Lab",
+            "Biology Lab",
+            "Physics Lab",
+            "Electronics Lab4",
+            "Water Quality Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            56,
+            51,
+            31,
+            7
+          ],
+          "venue_names": [
+            "Room T10",
+            "Room F12",
+            "Room 06",
+            "Room G11"
+          ]
+        }
+      },
+      "LST": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            36,
+            59,
+            34,
+            39,
+            60
+          ],
+          "venue_names": [
+            "Chemistry Lab",
+            "Physics Lab",
+            "Biology Lab",
+            "Electronics Lab4",
+            "Water Quality Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            53,
+            16
+          ],
+          "venue_names": [
+            "Room 24",
+            "Room 34"
+          ]
+        }
+      },
+      "MAT": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            88,
+            46,
+            2,
+            6,
+            44
+          ],
+          "venue_names": [
+            "Comp R21 Lab",
+            "Comp R42 Lab",
+            "Comp R22/23 Lab",
+            "Comp R32/33 Lab",
+            "Comp R31 Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            52,
+            58,
+            13,
+            54,
+            55,
+            16,
+            17,
+            7,
+            14,
+            20,
+            3,
+            53
+          ],
+          "venue_names": [
+            "UT-01",
+            "Room 12/13",
+            "UF-05",
+            "Room 14",
+            "Room T12",
+            "Room 34",
+            "UG-06",
+            "Room G11",
+            "Room S07",
+            "Room T06",
+            "Room S10",
+            "Room 24"
+          ]
+        }
+      },
+      "MET": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            22,
+            47
+          ],
+          "venue_names": [
+            "Argo Lab",
+            "Mechatronics Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            18,
+            51,
+            9,
+            7,
+            31,
+            12,
+            20,
+            56,
+            65,
+            52
+          ],
+          "venue_names": [
+            "UF-01",
+            "Room F12",
+            "US-01",
+            "Room G11",
+            "Room 06",
+            "Room T11",
+            "Room T06",
+            "Room T10",
+            "MASONRY",
+            "UT-01"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            63,
+            68,
+            37,
+            10
+          ],
+          "venue_names": [
+            "Automotive W/S2",
+            "Mechanical W/S1-Welding",
+            "Mechanical W/S2-Bench_work",
+            "Mechanical W/S1-Bench_Work"
+          ]
+        }
+      },
+      "MEU": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            23,
+            64
+          ],
+          "venue_names": [
+            "CNC Comp Lab",
+            "Simulation  Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            21,
+            47
+          ],
+          "venue_names": [
+            "Automotive Electronics Lab",
+            "Mechatronics Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            18,
+            14,
+            5,
+            7,
+            56,
+            1,
+            31,
+            12,
+            20,
+            3,
+            57,
+            65,
+            9
+          ],
+          "venue_names": [
+            "UF-01",
+            "Room S07",
+            "Room 11",
+            "Room G11",
+            "Room T10",
+            "UG-07",
+            "Room 06",
+            "Room T11",
+            "Room T06",
+            "Room S10",
+            "Room S06",
+            "MASONRY",
+            "US-01"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            37
+          ],
+          "venue_names": [
+            "Mechanical W/S2-Bench_work"
+          ]
+        }
+      },
+      "MMU": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            47
+          ],
+          "venue_names": [
+            "Mechatronics Lab"
+          ]
+        },
+        "Field / Site": {
+          "allowed_venue_ids": [
+            15
+          ],
+          "venue_names": [
+            "Highway"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            65,
+            12,
+            16,
+            5,
+            18,
+            52,
+            31
+          ],
+          "venue_names": [
+            "MASONRY",
+            "Room T11",
+            "Room 34",
+            "Room 11",
+            "UF-01",
+            "UT-01",
+            "Room 06"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            35
+          ],
+          "venue_names": [
+            "Electrical W/S2"
+          ]
+        }
+      },
+      "PWT": {
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            43
+          ],
+          "venue_names": [
+            "M2B Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            12,
+            5,
+            31,
+            7,
+            9
+          ],
+          "venue_names": [
+            "Room T11",
+            "Room 11",
+            "Room 06",
+            "Room G11",
+            "US-01"
+          ]
+        },
+        "Workshop": {
+          "allowed_venue_ids": [
+            27,
+            37,
+            10,
+            68
+          ],
+          "venue_names": [
+            "ACCT W/S-Plumbing-Section",
+            "Mechanical W/S2-Bench_work",
+            "Mechanical W/S1-Bench_Work",
+            "Mechanical W/S1-Welding"
+          ]
+        }
+      },
+      "REU": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            64
+          ],
+          "venue_names": [
+            "Simulation  Lab"
+          ]
+        },
+        "Engineering / Science Lab": {
+          "allowed_venue_ids": [
+            49
+          ],
+          "venue_names": [
+            "Solar/Wind Lab"
+          ]
+        },
+        "Theory / Lecture Room": {
+          "allowed_venue_ids": [
+            52,
+            9,
+            12
+          ],
+          "venue_names": [
+            "UT-01",
+            "US-01",
+            "Room T11"
+          ]
+        }
+      },
+      "SHC": {
+        "Computer / Digital Lab": {
+          "allowed_venue_ids": [
+            44
+          ],
+          "venue_names": [
+            "Comp R31 Lab"
+          ]
+        }
+      }
+    }
+  },
+  "cohort_home_venues": {
+    "L4A": {
+      "Engineering / Science Lab": [
+        21
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        18,
+        56,
+        1,
+        3,
+        51,
+        57
+      ],
+      "Workshop": [
+        42,
+        63
+      ]
+    },
+    "L4AE": {
+      "Engineering / Science Lab": [
+        21
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        18,
+        56,
+        1,
+        3,
+        51,
+        57
+      ],
+      "Workshop": [
+        42,
+        63
+      ]
+    },
+    "L4ARC": {
+      "Studio": [
+        86
+      ],
+      "Theory / Lecture Room": [
+        53,
+        8,
+        1,
+        16,
+        58,
+        9
+      ],
+      "Workshop": [
+        50
+      ]
+    },
+    "L4CDF": {
+      "Computer / Digital Lab": [
+        2,
+        6,
+        46
+      ],
+      "Engineering / Science Lab": [
+        41
+      ],
+      "Theory / Lecture Room": [
+        58,
+        56,
+        31,
+        16,
+        52,
+        8
+      ]
+    },
+    "L4CE": {
+      "Engineering / Science Lab": [
+        61
+      ],
+      "Studio": [
+        86
+      ],
+      "Theory / Lecture Room": [
+        8,
+        1,
+        18,
+        58,
+        9
+      ],
+      "Workshop": [
+        50,
+        26
+      ]
+    },
+    "L4CHE": {
+      "Engineering / Science Lab": [
+        61
+      ],
+      "Studio": [
+        86
+      ],
+      "Theory / Lecture Room": [
+        8,
+        1,
+        20,
+        58,
+        9
+      ],
+      "Workshop": [
+        50
+      ]
+    },
+    "L4CIE": {
+      "Engineering / Science Lab": [
+        61
+      ],
+      "Studio": [
+        86
+      ],
+      "Theory / Lecture Room": [
+        8,
+        1,
+        53,
+        58,
+        9
+      ],
+      "Workshop": [
+        50
+      ]
+    },
+    "L4CS": {
+      "Computer / Digital Lab": [
+        2,
+        46,
+        6,
+        88
+      ],
+      "Engineering / Science Lab": [
+        41
+      ],
+      "Theory / Lecture Room": [
+        58,
+        16,
+        55
+      ]
+    },
+    "L4EBE": {
+      "Engineering / Science Lab": [
+        39
+      ],
+      "Theory / Lecture Room": [
+        13,
+        58,
+        16,
+        52
+      ],
+      "Workshop": [
+        35
+      ]
+    },
+    "L4EE": {
+      "Engineering / Science Lab": [
+        39
+      ],
+      "Theory / Lecture Room": [
+        58,
+        13,
+        17,
+        16,
+        25
+      ],
+      "Workshop": [
+        35
+      ]
+    },
+    "L4EE-E": {
+      "Engineering / Science Lab": [
+        39
+      ],
+      "Theory / Lecture Room": [
+        54,
+        55,
+        14,
+        5,
+        58
+      ],
+      "Workshop": [
+        35
+      ]
+    },
+    "L4ERE": {
+      "Engineering / Science Lab": [
+        39
+      ],
+      "Theory / Lecture Room": [
+        13,
+        58,
+        16,
+        52
+      ],
+      "Workshop": [
+        35
+      ]
+    },
+    "L4ETE": {
+      "Engineering / Science Lab": [
+        39
+      ],
+      "Theory / Lecture Room": [
+        58,
+        17,
+        13,
+        54,
+        16,
+        25
+      ],
+      "Workshop": [
+        35
+      ]
+    },
+    "L4GGE": {
+      "Engineering / Science Lab": [
+        33,
+        43
+      ],
+      "Field / Site": [
+        28
+      ],
+      "Theory / Lecture Room": [
+        1,
+        54,
+        56,
+        7
+      ]
+    },
+    "L4HD": {
+      "Engineering / Science Lab": [
+        21
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        56,
+        1,
+        12,
+        3,
+        51,
+        57,
+        65
+      ],
+      "Workshop": [
+        42
+      ]
+    },
+    "L4IE": {
+      "Engineering / Science Lab": [
+        39
+      ],
+      "Theory / Lecture Room": [
+        58,
+        17,
+        13,
+        5,
+        54,
+        16,
+        25
+      ],
+      "Workshop": [
+        35
+      ]
+    },
+    "L4IT": {
+      "Computer / Digital Lab": [
+        2,
+        46,
+        6,
+        88
+      ],
+      "Engineering / Science Lab": [
+        41
+      ],
+      "Theory / Lecture Room": [
+        58,
+        16,
+        55
+      ]
+    },
+    "L4LST": {
+      "Engineering / Science Lab": [
+        36,
+        34,
+        59
+      ]
+    },
+    "L4MAT": {
+      "Computer / Digital Lab": [
+        2,
+        88,
+        46,
+        6,
+        44
+      ],
+      "Theory / Lecture Room": [
+        58,
+        16,
+        52,
+        14,
+        3,
+        55
+      ]
+    },
+    "L4ME": {
+      "Theory / Lecture Room": [
+        18,
+        51,
+        7,
+        1,
+        56
+      ],
+      "Workshop": [
+        37,
+        63
+      ]
+    },
+    "L4PWOGE": {
+      "Engineering / Science Lab": [
+        43
+      ],
+      "Theory / Lecture Room": [
+        51,
+        7,
+        1,
+        12,
+        56
+      ],
+      "Workshop": [
+        10,
+        27
+      ]
+    },
+    "L5A": {
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        18,
+        1,
+        9,
+        12,
+        25,
+        58
+      ],
+      "Workshop": [
+        42
+      ]
+    },
+    "L5AE": {
+      "Computer / Digital Lab": [
+        64
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        18,
+        1,
+        9,
+        12,
+        25,
+        58
+      ]
+    },
+    "L5ARC": {
+      "Computer / Digital Lab": [
+        2
+      ],
+      "Field / Site": [
+        28,
+        15
+      ],
+      "Studio": [
+        86
+      ],
+      "Theory / Lecture Room": [
+        55,
+        53,
+        16,
+        8
+      ]
+    },
+    "L5CDF": {
+      "Computer / Digital Lab": [
+        2,
+        6
+      ],
+      "Theory / Lecture Room": [
+        13,
+        31,
+        17,
+        58,
+        56,
+        8
+      ]
+    },
+    "L5CE": {
+      "Computer / Digital Lab": [
+        2
+      ],
+      "Engineering / Science Lab": [
+        60,
+        61
+      ],
+      "Field / Site": [
+        28,
+        15
+      ],
+      "Theory / Lecture Room": [
+        1,
+        17,
+        3,
+        8
+      ]
+    },
+    "L5CHE": {
+      "Computer / Digital Lab": [
+        2
+      ],
+      "Engineering / Science Lab": [
+        60,
+        61
+      ],
+      "Field / Site": [
+        28,
+        15
+      ],
+      "Theory / Lecture Room": [
+        1,
+        17,
+        3,
+        8
+      ]
+    },
+    "L5CIE": {
+      "Computer / Digital Lab": [
+        2
+      ],
+      "Engineering / Science Lab": [
+        60,
+        61
+      ],
+      "Field / Site": [
+        28,
+        15
+      ],
+      "Theory / Lecture Room": [
+        1,
+        17,
+        3,
+        16,
+        8
+      ]
+    },
+    "L5CS": {
+      "Computer / Digital Lab": [
+        6,
+        46,
+        2,
+        44,
+        88
+      ],
+      "Theory / Lecture Room": [
+        58,
+        13,
+        1,
+        14,
+        17,
+        56,
+        3,
+        53,
+        54,
+        65
+      ]
+    },
+    "L5EBE": {
+      "Computer / Digital Lab": [
+        6
+      ],
+      "Engineering / Science Lab": [
+        91,
+        40
+      ],
+      "Theory / Lecture Room": [
+        13,
+        17,
+        1,
+        12,
+        4,
+        65,
+        7
+      ]
+    },
+    "L5EE": {
+      "Computer / Digital Lab": [
+        6
+      ],
+      "Engineering / Science Lab": [
+        91
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        17,
+        8,
+        1,
+        3,
+        65,
+        7
+      ],
+      "Workshop": [
+        38
+      ]
+    },
+    "L5EE-E": {
+      "Computer / Digital Lab": [
+        2
+      ],
+      "Engineering / Science Lab": [
+        91
+      ],
+      "Theory / Lecture Room": [
+        5,
+        65,
+        17,
+        4,
+        54,
+        58
+      ],
+      "Workshop": [
+        38
+      ]
+    },
+    "L5EHT": {
+      "Engineering / Science Lab": [
+        91
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        17,
+        57,
+        13,
+        55,
+        14,
+        3,
+        65
+      ],
+      "Workshop": [
+        38,
+        68
+      ]
+    },
+    "L5ESE": {
+      "Computer / Digital Lab": [
+        6
+      ],
+      "Engineering / Science Lab": [
+        91
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        17,
+        8,
+        1,
+        65,
+        3,
+        53
+      ]
+    },
+    "L5ETE": {
+      "Computer / Digital Lab": [
+        6
+      ],
+      "Engineering / Science Lab": [
+        45,
+        91
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        17,
+        8,
+        1,
+        3,
+        53,
+        54,
+        65,
+        7
+      ]
+    },
+    "L5EWE": {
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        1,
+        8,
+        3,
+        65
+      ]
+    },
+    "L5GGE": {
+      "Engineering / Science Lab": [
+        33,
+        43
+      ],
+      "Theory / Lecture Room": [
+        1,
+        25,
+        58
+      ]
+    },
+    "L5HD": {
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        18,
+        1,
+        12,
+        16,
+        51,
+        54,
+        25,
+        58
+      ],
+      "Workshop": [
+        42,
+        68
+      ]
+    },
+    "L5IE": {
+      "Engineering / Science Lab": [
+        47,
+        91
+      ],
+      "Theory / Lecture Room": [
+        55,
+        1,
+        13,
+        57,
+        8
+      ],
+      "Workshop": [
+        38
+      ]
+    },
+    "L5IT": {
+      "Computer / Digital Lab": [
+        6,
+        2,
+        46,
+        44,
+        88
+      ],
+      "Theory / Lecture Room": [
+        58,
+        1,
+        13,
+        14,
+        17,
+        3,
+        53,
+        54,
+        65
+      ]
+    },
+    "L5LST": {
+      "Engineering / Science Lab": [
+        59,
+        36,
+        34
+      ]
+    },
+    "L5MAT": {
+      "Computer / Digital Lab": [
+        88,
+        2,
+        44
+      ],
+      "Theory / Lecture Room": [
+        54,
+        13,
+        17,
+        55,
+        58,
+        20,
+        53
+      ]
+    },
+    "L5ME": {
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        1,
+        20,
+        51,
+        7,
+        25,
+        58
+      ],
+      "Workshop": [
+        68
+      ]
+    },
+    "L5PWOGE": {
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        1,
+        12,
+        5,
+        51,
+        54,
+        7
+      ],
+      "Workshop": [
+        27,
+        68
+      ]
+    },
+    "L6A": {
+      "Computer / Digital Lab": [
+        64
+      ],
+      "Engineering / Science Lab": [
+        21
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        5,
+        31,
+        12
+      ],
+      "Workshop": [
+        63
+      ]
+    },
+    "L6AE": {
+      "Computer / Digital Lab": [
+        64
+      ],
+      "Engineering / Science Lab": [
+        21
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        5,
+        31,
+        12
+      ]
+    },
+    "L6ARC": {
+      "Computer / Digital Lab": [
+        6
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        55,
+        7,
+        16,
+        53,
+        58
+      ]
+    },
+    "L6CDF": {
+      "Computer / Digital Lab": [
+        88,
+        44,
+        46
+      ],
+      "Theory / Lecture Room": [
+        54,
+        16,
+        20,
+        58,
+        65
+      ]
+    },
+    "L6CE": {
+      "Computer / Digital Lab": [
+        6
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Studio": [
+        86
+      ],
+      "Theory / Lecture Room": [
+        7,
+        18,
+        58
+      ]
+    },
+    "L6CHE": {
+      "Engineering / Science Lab": [
+        61
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        20,
+        65,
+        14,
+        12,
+        5,
+        58
+      ]
+    },
+    "L6CIE": {
+      "Engineering / Science Lab": [
+        29
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        14,
+        53,
+        55,
+        7,
+        58
+      ]
+    },
+    "L6CS": {
+      "Computer / Digital Lab": [
+        46,
+        6,
+        88
+      ],
+      "Theory / Lecture Room": [
+        7,
+        8,
+        13,
+        9
+      ]
+    },
+    "L6EBE": {
+      "Engineering / Science Lab": [
+        24,
+        39,
+        40
+      ],
+      "Theory / Lecture Room": [
+        8,
+        17,
+        3,
+        4
+      ],
+      "Workshop": [
+        38
+      ]
+    },
+    "L6EE": {
+      "Engineering / Science Lab": [
+        24,
+        39
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        1,
+        3,
+        4,
+        8
+      ],
+      "Workshop": [
+        38
+      ]
+    },
+    "L6EHT": {
+      "Theory / Lecture Room": [
+        1,
+        4,
+        54,
+        17,
+        12,
+        5
+      ],
+      "Workshop": [
+        38
+      ]
+    },
+    "L6ESE": {
+      "Engineering / Science Lab": [
+        24,
+        39
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        1,
+        3,
+        4,
+        5,
+        8
+      ]
+    },
+    "L6ETE": {
+      "Engineering / Science Lab": [
+        45,
+        24,
+        39
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        1,
+        54,
+        3,
+        4,
+        8
+      ]
+    },
+    "L6EWE": {
+      "Engineering / Science Lab": [
+        24,
+        39
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        1,
+        3,
+        4,
+        9,
+        8
+      ]
+    },
+    "L6GGE": {
+      "Engineering / Science Lab": [
+        33,
+        43
+      ],
+      "Field / Site": [
+        87
+      ],
+      "Theory / Lecture Room": [
+        51,
+        31
+      ]
+    },
+    "L6HD": {
+      "Computer / Digital Lab": [
+        64
+      ],
+      "Engineering / Science Lab": [
+        22
+      ],
+      "Theory / Lecture Room": [
+        31,
+        9
+      ],
+      "Workshop": [
+        42
+      ]
+    },
+    "L6IE": {
+      "Engineering / Science Lab": [
+        24
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        14,
+        17,
+        20,
+        4,
+        5
+      ]
+    },
+    "L6IT": {
+      "Computer / Digital Lab": [
+        46,
+        6,
+        2,
+        88
+      ],
+      "Theory / Lecture Room": [
+        7,
+        8,
+        13,
+        9
+      ]
+    },
+    "L6LST": {
+      "Engineering / Science Lab": [
+        59,
+        39,
+        60,
+        34
+      ],
+      "Theory / Lecture Room": [
+        53,
+        16,
+        57
+      ]
+    },
+    "L6MAT": {
+      "Computer / Digital Lab": [
+        46,
+        88,
+        44,
+        6
+      ],
+      "Theory / Lecture Room": [
+        52,
+        13,
+        7
+      ]
+    },
+    "L6ME": {
+      "Engineering / Science Lab": [
+        47
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        9,
+        51,
+        65,
+        31,
+        52
+      ],
+      "Workshop": [
+        68
+      ]
+    },
+    "L6PWOGE": {
+      "Engineering / Science Lab": [
+        47
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        9,
+        12,
+        51,
+        31,
+        52
+      ],
+      "Workshop": [
+        68
+      ]
+    },
+    "L7-1AEE": {
+      "Theory / Lecture Room": [
+        14,
+        8,
+        3,
+        53,
+        55,
+        57
+      ],
+      "Workshop": [
+        42
+      ]
+    },
+    "L7-1BLIST": {
+      "Engineering / Science Lab": [
+        34,
+        36,
+        60
+      ],
+      "Theory / Lecture Room": [
+        51,
+        56,
+        12,
+        65,
+        7
+      ]
+    },
+    "L7-1CE": {
+      "Engineering / Science Lab": [
+        61
+      ],
+      "Field / Site": [
+        28
+      ],
+      "Theory / Lecture Room": [
+        18,
+        51,
+        3,
+        31,
+        56,
+        7
+      ]
+    },
+    "L7-1CHE": {
+      "Engineering / Science Lab": [
+        61
+      ],
+      "Field / Site": [
+        28
+      ],
+      "Theory / Lecture Room": [
+        18,
+        3,
+        51,
+        56,
+        7,
+        12,
+        55,
+        57
+      ]
+    },
+    "L7-1CIE": {
+      "Engineering / Science Lab": [
+        61
+      ],
+      "Field / Site": [
+        28
+      ],
+      "Theory / Lecture Room": [
+        18,
+        51,
+        12,
+        3,
+        31,
+        56,
+        7
+      ]
+    },
+    "L7-1CS": {
+      "Computer / Digital Lab": [
+        2,
+        6,
+        46
+      ],
+      "Engineering / Science Lab": [
+        41
+      ],
+      "Theory / Lecture Room": [
+        17,
+        1,
+        13,
+        4,
+        14,
+        52,
+        55,
+        57,
+        58,
+        9
+      ]
+    },
+    "L7-1CS-E": {
+      "Computer / Digital Lab": [
+        44,
+        2
+      ],
+      "Engineering / Science Lab": [
+        41
+      ],
+      "Theory / Lecture Room": [
+        20,
+        1
+      ]
+    },
+    "L7-1EAE": {
+      "Theory / Lecture Room": [
+        1,
+        13,
+        3,
+        4,
+        58,
+        12,
+        55
+      ]
+    },
+    "L7-1EAE-E": {
+      "Theory / Lecture Room": [
+        1,
+        3,
+        55,
+        20,
+        5,
+        16,
+        52
+      ]
+    },
+    "L7-1EBE": {
+      "Engineering / Science Lab": [
+        41
+      ],
+      "Theory / Lecture Room": [
+        1,
+        13,
+        4,
+        58,
+        12,
+        55
+      ]
+    },
+    "L7-1EBE-E": {
+      "Engineering / Science Lab": [
+        40,
+        41
+      ],
+      "Theory / Lecture Room": [
+        1,
+        3,
+        55,
+        20,
+        16,
+        52
+      ]
+    },
+    "L7-1IT": {
+      "Computer / Digital Lab": [
+        2,
+        6,
+        46
+      ],
+      "Engineering / Science Lab": [
+        41
+      ],
+      "Theory / Lecture Room": [
+        17,
+        1,
+        13,
+        4,
+        14,
+        52,
+        55,
+        57,
+        58,
+        9
+      ]
+    },
+    "L7-1IT-E": {
+      "Computer / Digital Lab": [
+        44,
+        2
+      ],
+      "Engineering / Science Lab": [
+        41
+      ],
+      "Theory / Lecture Room": [
+        20,
+        1
+      ]
+    },
+    "L7-1ME": {
+      "Computer / Digital Lab": [
+        6
+      ],
+      "Engineering / Science Lab": [
+        47
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        18
+      ],
+      "Workshop": [
+        37,
+        35
+      ]
+    },
+    "L7-1MME": {
+      "Computer / Digital Lab": [
+        6
+      ],
+      "Engineering / Science Lab": [
+        47
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        18
+      ],
+      "Workshop": [
+        37,
+        35
+      ]
+    },
+    "L7-1REE": {
+      "Engineering / Science Lab": [
+        49
+      ],
+      "Theory / Lecture Room": [
+        1,
+        13,
+        3,
+        54,
+        12,
+        55
+      ]
+    },
+    "L7-2AEE": {
+      "Computer / Digital Lab": [
+        64
+      ],
+      "Engineering / Science Lab": [
+        22
+      ],
+      "Theory / Lecture Room": [
+        9,
+        57,
+        8
+      ]
+    },
+    "L7-2BLIST": {
+      "Engineering / Science Lab": [
+        34,
+        39,
+        59
+      ],
+      "Theory / Lecture Room": [
+        56,
+        31,
+        51
+      ]
+    },
+    "L7-2CE": {
+      "Engineering / Science Lab": [
+        29
+      ],
+      "Theory / Lecture Room": [
+        5,
+        51,
+        3
+      ]
+    },
+    "L7-2CHE": {
+      "Engineering / Science Lab": [
+        29
+      ],
+      "Theory / Lecture Room": [
+        51,
+        20,
+        65,
+        3,
+        31,
+        52
+      ]
+    },
+    "L7-2CIE": {
+      "Engineering / Science Lab": [
+        29
+      ],
+      "Theory / Lecture Room": [
+        5,
+        51,
+        3,
+        53
+      ]
+    },
+    "L7-2CS": {
+      "Computer / Digital Lab": [
+        2,
+        46,
+        88,
+        44,
+        6
+      ],
+      "Theory / Lecture Room": [
+        58,
+        14,
+        17,
+        31,
+        1,
+        13,
+        55
+      ]
+    },
+    "L7-2CS-E": {
+      "Computer / Digital Lab": [
+        44,
+        88,
+        2,
+        46
+      ],
+      "Theory / Lecture Room": [
+        20,
+        9,
+        65
+      ]
+    },
+    "L7-2EAE": {
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        4,
+        31,
+        58
+      ]
+    },
+    "L7-2EAE-E": {
+      "Theory / Lecture Room": [
+        20,
+        54,
+        3,
+        65,
+        1,
+        31
+      ]
+    },
+    "L7-2EBE": {
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        4,
+        3,
+        58
+      ]
+    },
+    "L7-2EBE-E": {
+      "Theory / Lecture Room": [
+        54,
+        20,
+        3,
+        1,
+        31
+      ]
+    },
+    "L7-2IT": {
+      "Computer / Digital Lab": [
+        2,
+        46,
+        6,
+        88,
+        44
+      ],
+      "Theory / Lecture Room": [
+        58,
+        14,
+        17,
+        13,
+        5
+      ]
+    },
+    "L7-2IT-E": {
+      "Computer / Digital Lab": [
+        44,
+        88,
+        2,
+        46
+      ],
+      "Theory / Lecture Room": [
+        20,
+        9
+      ]
+    },
+    "L7-2ME": {
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        7,
+        18,
+        8,
+        3,
+        56
+      ]
+    },
+    "L7-2ME-E": {
+      "Computer / Digital Lab": [
+        64
+      ],
+      "Theory / Lecture Room": [
+        12,
+        14,
+        5,
+        9
+      ]
+    },
+    "L7-2MME": {
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        65,
+        8,
+        18,
+        3
+      ]
+    },
+    "L7-2MME-E": {
+      "Theory / Lecture Room": [
+        12,
+        5,
+        52
+      ]
+    },
+    "L7-2REE": {
+      "Engineering / Science Lab": [
+        49
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        4,
+        14,
+        52,
+        55,
+        65
+      ]
+    },
+    "L7-3ME": {
+      "Computer / Digital Lab": [
+        23
+      ],
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        18,
+        7,
+        4,
+        56,
+        31,
+        8
+      ]
+    },
+    "L7-3ME-E": {
+      "Theory / Lecture Room": [
+        14,
+        5,
+        12,
+        52,
+        57
+      ]
+    },
+    "L7-3MME": {
+      "Field / Site": [
+        15
+      ],
+      "Theory / Lecture Room": [
+        65,
+        12,
+        18,
+        8
+      ]
+    },
+    "L7-3MME-E": {
+      "Theory / Lecture Room": [
+        5,
+        12,
+        16
+      ]
+    },
+    "L8AEE": {
+      "Computer / Digital Lab": [
+        64
+      ],
+      "Engineering / Science Lab": [
+        21,
+        22
+      ],
+      "Theory / Lecture Room": [
+        57,
+        9,
+        52,
+        55
+      ]
+    },
+    "L8BLIST": {
+      "Engineering / Science Lab": [
+        36,
+        34,
+        59
+      ]
+    },
+    "L8CE": {
+      "Theory / Lecture Room": [
+        9,
+        18,
+        20,
+        51,
+        56,
+        7
+      ]
+    },
+    "L8CHE": {
+      "Engineering / Science Lab": [
+        61
+      ],
+      "Theory / Lecture Room": [
+        20,
+        18,
+        51,
+        56,
+        7
+      ]
+    },
+    "L8CIE": {
+      "Theory / Lecture Room": [
+        9,
+        14,
+        16,
+        18,
+        51,
+        53,
+        7
+      ]
+    },
+    "L8CS": {
+      "Computer / Digital Lab": [
+        44,
+        46,
+        6
+      ],
+      "Theory / Lecture Room": [
+        56,
+        3,
+        14,
+        55,
+        58,
+        9
+      ]
+    },
+    "L8CS-E": {
+      "Computer / Digital Lab": [
+        6,
+        44,
+        46,
+        88
+      ],
+      "Theory / Lecture Room": [
+        53,
+        20,
+        54,
+        57,
+        14
+      ]
+    },
+    "L8EAE": {
+      "Theory / Lecture Room": [
+        4,
+        17,
+        31,
+        12
+      ]
+    },
+    "L8EAE-E": {
+      "Theory / Lecture Room": [
+        1,
+        20,
+        54,
+        65
+      ]
+    },
+    "L8EBE": {
+      "Theory / Lecture Room": [
+        4,
+        17,
+        31,
+        12
+      ]
+    },
+    "L8EBE-E": {
+      "Theory / Lecture Room": [
+        1,
+        20,
+        54,
+        65
+      ]
+    },
+    "L8IT": {
+      "Computer / Digital Lab": [
+        2,
+        44,
+        46,
+        6,
+        88
+      ],
+      "Theory / Lecture Room": [
+        54,
+        3,
+        12,
+        17
+      ]
+    },
+    "L8IT-E": {
+      "Computer / Digital Lab": [
+        88,
+        44,
+        46
+      ],
+      "Theory / Lecture Room": [
+        20,
+        54,
+        65
+      ]
+    },
+    "L8ME": {
+      "Engineering / Science Lab": [
+        21,
+        47
+      ],
+      "Theory / Lecture Room": [
+        18,
+        31,
+        3,
+        5,
+        65,
+        56
+      ]
+    },
+    "L8MME": {
+      "Engineering / Science Lab": [
+        47
+      ],
+      "Theory / Lecture Room": [
+        18,
+        5,
+        31,
+        3,
+        56
+      ]
+    },
+    "L8REE": {
+      "Computer / Digital Lab": [
+        64
+      ],
+      "Theory / Lecture Room": [
+        52,
+        3,
+        9,
+        12
+      ]
+    },
+    "SHORTCOURSE": {
+      "Computer / Digital Lab": [
+        44
+      ]
+    }
+  }
+}
