@@ -1,0 +1,100 @@
+{
+  "schema_version": "1.0.0",
+  "institution": {
+    "code": "ATC",
+    "name": "Arusha Technical College",
+    "country": "TZ"
+  },
+  "calendar_grid": {
+    "active_days": [
+      "MONDAY",
+      "TUESDAY",
+      "WEDNESDAY",
+      "THURSDAY",
+      "FRIDAY",
+      "SATURDAY"
+    ],
+    "periods_per_day": 18,
+    "period_duration_minutes": 45,
+    "breaks_after_periods": [4, 6],
+    "enforce_odd_start_alignment_for_multi_period": true,
+    "day_overrides": {
+      "FRIDAY": {
+        "apply_override": false,
+        "day_active": true,
+        "blocked_periods": [6, 7],
+        "additional_breaks_after_periods": [5],
+        "max_period": 18,
+        "comment": "Set apply_override=true for institutions blocking midday periods for Friday Jummah prayers"
+      },
+      "SATURDAY": {
+        "apply_override": false,
+        "day_active": true,
+        "blocked_periods": [],
+        "max_period": 6,
+        "comment": "Set apply_override=true with day_active=false for Mon-Fri unis, or max_period=6 for half-day Saturdays"
+      },
+      "SUNDAY": {
+        "apply_override": true,
+        "day_active": false,
+        "blocked_periods": [],
+        "max_period": 0
+      }
+    }
+  },
+  "streams": {
+    "full_time": {
+      "is_evening_stream": false,
+      "min_period": 1,
+      "max_period": 12,
+      "supported_durations": [1, 2, 4, 6],
+      "allow_stream_boundary_crossing": false
+    },
+    "evening": {
+      "is_evening_stream": true,
+      "min_period": 13,
+      "max_period": 18,
+      "supported_durations": [1, 2, 4, 6],
+      "twilight_buffer": {
+        "enabled": true,
+        "buffer_min_period": 11,
+        "buffer_max_period": 12,
+        "allow_bridge_into_evening": true,
+        "soft_penalty_weight": 15,
+        "comment": "Allows evening sessions to start at P11 (11-12 or 11-14) with a soft penalty so solver prefers P13-P18 first"
+      }
+    }
+  },
+  "venue_rules": {
+    "enforce_capacity": false,
+    "normalize_case": true,
+    "compatibility_map": {
+      "Theory / Lecture Room": {
+        "primary": ["Theory / Lecture Room"],
+        "fallback": []
+      },
+      "Computer / Digital Lab": {
+        "primary": ["Computer / Digital Lab"],
+        "fallback": ["Theory / Lecture Room"]
+      },
+      "Engineering / Science Lab": {
+        "primary": ["Engineering / Science Lab"],
+        "fallback": ["Workshop", "Theory / Lecture Room"]
+      },
+      "Workshop": {
+        "primary": ["Workshop"],
+        "fallback": ["Engineering / Science Lab", "Theory / Lecture Room"]
+      },
+      "Field / Site": {
+        "primary": ["Field / Site"],
+        "fallback": ["Theory / Lecture Room", "Workshop", "Engineering / Science Lab"]
+      },
+      "Studio": {
+        "primary": ["Studio"],
+        "fallback": ["Theory / Lecture Room"]
+      }
+    },
+    "allow_fallback_venues_in_initial_domain": true,
+    "fallback_venue_soft_penalty_weight": 25
+  }
+}
