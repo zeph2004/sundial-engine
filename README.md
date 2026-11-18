@@ -1,4 +1,26 @@
-# sundial-engine
+<div align="center">
+
+
+```text
+                                   \          |          /                                   
+                                    \     .─█████─.     /                                    
+                              `.     \ .─'  ░░░░░  `─. /     .'                              
+                                `─.  ██  ░░░░░░░░░░░  ██  .─'                                
+                                  .─'  ░░░░░░ ▲ ░░░░░░  `─.                                  
+                                 ╱   ░░░░░░░░ ║ ░░░░░░░░   ╲                                 
+                      ─────────███ ░░░░░░░░░░ ║ ░░░░░░░░░░ ███─────────                      
+                  ════════════╡  S U N D I A L - E N G I N E  ╞════════════                  
+                      ─────────███ ░░░░░░░░░░ ║ ░░░░░░░░░░ ███─────────                      
+                                 ╲   ░░░░░░░░ ║ ░░░░░░░░   ╱                                 
+                                  `─.  ░░░░░░ ▼ ░░░░░░  .─'                                  
+                                .─'  ██  ░░░░░░░░░░░  ██  `─.                                
+                              .'     / `─.  ░░░░░  .─' \     `.                              
+                                    /     `─█████─'     \                                    
+                                   /          |          \                                   
+                [ First-Principles CSP & Optimization Timetabling Engine ]                 
+```
+
+</div>
 
 An institution-agnostic **University Course Timetabling Constraint Satisfaction & Optimization Engine** built from first principles in pure Python 3 (zero external black-box solver dependencies).
 
