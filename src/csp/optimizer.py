@@ -866,12 +866,19 @@ class SimulatedAnnealingOptimizer:
         compatible_venues: Dict[str, List[int | str]],
         venue_tier_label: Dict[str, Dict[int | str, str]],
         affinity_config: Optional[Dict[str, Any]] = None,
+        pinned_session_ids: Optional[Set[str]] = None,
     ) -> None:
         self.sessions = sessions
         self.venues = venues
         self.schema = schema
         self.compatible_venues = compatible_venues
         self.venue_tier_label = venue_tier_label
+        self.pinned_session_ids: Set[str] = set(pinned_session_ids or ())
+        self.pinned_snapshot: Dict[str, Tuple[str, int, int | str]] = {
+            sid: initial_assignments[sid]
+            for sid in self.pinned_session_ids
+            if sid in initial_assignments
+        }
 
         self.engine = SoftConstraintEngine(
             sessions=sessions,
@@ -900,6 +907,9 @@ class SimulatedAnnealingOptimizer:
 
         # Session metadata arrays/maps for fast inner-loop access
         self.all_sids: List[str] = [s["sessionId"] for s in sessions]
+        self.movable_sids: List[str] = [
+            sid for sid in self.all_sids if sid not in self.pinned_session_ids
+        ]
         self.var_duration: Dict[str, int] = {}
         self.var_is_evening: Dict[str, bool] = {}
         self.var_lecturers: Dict[str, Tuple[str, ...]] = {}
@@ -977,17 +987,18 @@ class SimulatedAnnealingOptimizer:
                 valid_slots_cache[(is_eve, dur)] if allows_saturday else weekday_slots_cache[(is_eve, dur)]
             )
 
-            self.sids_by_stream_dur[(is_eve, dur)].append(sid)
-            is_shared_prac = self.engine.session_is_shared_practical[sid]
-            is_any_prac = is_shared_prac or self.engine.session_is_solo_practical[sid]
-            if is_shared_prac:
-                self.shared_prac_by_stream_dur[(is_eve, dur)].append(sid)
-            for c in cohs:
-                self.sids_by_cohort_dur[(c, dur)].append(sid)
+            if sid not in self.pinned_session_ids:
+                self.sids_by_stream_dur[(is_eve, dur)].append(sid)
+                is_shared_prac = self.engine.session_is_shared_practical[sid]
+                is_any_prac = is_shared_prac or self.engine.session_is_solo_practical[sid]
                 if is_shared_prac:
-                    self.shared_prac_by_cohort_dur[(c, dur)].append(sid)
-                if is_any_prac:
-                    self.any_prac_by_cohort_dur[(c, dur)].append(sid)
+                    self.shared_prac_by_stream_dur[(is_eve, dur)].append(sid)
+                for c in cohs:
+                    self.sids_by_cohort_dur[(c, dur)].append(sid)
+                    if is_shared_prac:
+                        self.shared_prac_by_cohort_dur[(c, dur)].append(sid)
+                    if is_any_prac:
+                        self.any_prac_by_cohort_dur[(c, dur)].append(sid)
 
         self.swappable_cohort_dur_groups: List[List[str]] = [
             grp for grp in self.sids_by_cohort_dur.values() if len(grp) >= 2
@@ -1056,6 +1067,7 @@ class SimulatedAnnealingOptimizer:
         Identifies sessions currently contributing to soft penalties (Saturday sessions,
         Twilight sessions, non-1A venue sessions, or sessions on days with cohort idle gaps
         or workload overload) for guided neighborhood proposals.
+        Excludes all pinned_session_ids.
         """
         penalized: List[str] = []
         gappy_cohort_days: Set[Tuple[str, int]] = set()
@@ -1064,6 +1076,8 @@ class SimulatedAnnealingOptimizer:
                 gappy_cohort_days.add((c, d_idx))
 
         for sid, (d_idx, _, _, _, _) in self.state.items():
+            if sid in self.pinned_session_ids:
+                continue
             if self.session_cost_cache[sid] > 0.0:
                 penalized.append(sid)
                 continue
@@ -1072,19 +1086,19 @@ class SimulatedAnnealingOptimizer:
                     penalized.append(sid)
                     break
 
-        return penalized if penalized else self.all_sids
+        return penalized if penalized else self.movable_sids
 
     def _refine_venues_greedily(self) -> int:
         """
         Zero-cost post-SA greedy venue refinement pass:
-        Iterates over all sessions and upgrades any session currently placed in a
+        Iterates over all sessions and upgrades any unpinned session currently placed in a
         non-1A venue (Tier 1B / 1C / 2) to a free higher-affinity venue (e.g. Tier 1A)
         at its exact assigned (day, start_p) whenever one has opened up.
         Preserves 100% of hard constraints and only monotonically decreases or preserves
         the total soft objective.
         """
         upgrades = 0
-        for sid in self.all_sids:
+        for sid in self.movable_sids:
             d_idx, start_p, old_vid, g_mask, l_mask = self.state[sid]
             old_raw = self.engine.session_venue_raw_penalty[sid].get(old_vid, 0.0)
             if old_raw <= 0.0:
@@ -1130,6 +1144,8 @@ class SimulatedAnnealingOptimizer:
         and accepts/rejects via the Metropolis criterion.
         Returns `(accepted, delta_e)`.
         """
+        if sid in self.pinned_session_ids:
+            return False, 0.0
         old_d_idx, old_start_p, old_vid, old_g_mask, old_l_mask = self.state[sid]
         new_d_idx, new_start_p, new_g_mask, new_l_mask = target_slot
 
@@ -1291,7 +1307,7 @@ class SimulatedAnnealingOptimizer:
         (and assigning each session its highest-affinity available venue at the target time slot).
         Preserves 100% of hard constraints.
         """
-        if sid_a == sid_b:
+        if sid_a == sid_b or sid_a in self.pinned_session_ids or sid_b in self.pinned_session_ids:
             return False, 0.0
 
         da, spa, vida, gma, lma = self.state[sid_a]
@@ -1544,7 +1560,7 @@ class SimulatedAnnealingOptimizer:
         initial_obj = initial_breakdown.total_objective
         self.current_objective = initial_obj
 
-        if not enabled or max_iter <= 0:
+        if not enabled or max_iter <= 0 or not self.movable_sids:
             elapsed = time.perf_counter() - start_time
             return initial_assignments, OptimizerStats(
                 enabled=enabled,
@@ -1577,7 +1593,7 @@ class SimulatedAnnealingOptimizer:
         pairwise_swap_proposals = 0
 
         penalized_sids = self._collect_penalized_sessions()
-        all_sids = self.all_sids
+        movable_sids = self.movable_sids
         coh_swap_groups = self.swappable_cohort_dur_groups
         stream_swap_groups = self.swappable_stream_dur_groups
 
@@ -1641,6 +1657,8 @@ class SimulatedAnnealingOptimizer:
                                     sid_b = stream_shared[rng.randrange(len(stream_shared))]
                                 else:
                                     grp = self.sids_by_stream_dur[(eve_a, dur_a)]
+                                    if len(grp) < 2:
+                                        continue
                                     sid_b = grp[rng.randrange(len(grp))]
                     elif cohs_a and rng.random() < 0.65:
                         c = cohs_a[rng.randrange(len(cohs_a))]
@@ -1649,9 +1667,13 @@ class SimulatedAnnealingOptimizer:
                             sid_b = grp[rng.randrange(len(grp))]
                         else:
                             grp = self.sids_by_stream_dur[(eve_a, dur_a)]
+                            if len(grp) < 2:
+                                continue
                             sid_b = grp[rng.randrange(len(grp))]
                     else:
                         grp = self.sids_by_stream_dur[(eve_a, dur_a)]
+                        if len(grp) < 2:
+                            continue
                         sid_b = grp[rng.randrange(len(grp))]
                 else:
                     if coh_swap_groups and rng.random() < 0.65:
@@ -1674,7 +1696,7 @@ class SimulatedAnnealingOptimizer:
                         v_slots = self.var_valid_slots[sid]
                         target_slot = v_slots[rng.randrange(len(v_slots))]
                 else:
-                    sid = all_sids[rng.randrange(len(all_sids))]
+                    sid = movable_sids[rng.randrange(len(movable_sids))]
                     v_slots = self.var_valid_slots[sid]
                     target_slot = v_slots[rng.randrange(len(v_slots))]
 
@@ -1708,6 +1730,11 @@ class SimulatedAnnealingOptimizer:
             pass
 
         best_assignments = self._export_current_assignments()
+        for sid, expected_pin in self.pinned_snapshot.items():
+            assert best_assignments.get(sid) == expected_pin, (
+                f"Pinned session '{sid}' was modified during SA optimization: "
+                f"expected {expected_pin}, got {best_assignments.get(sid)}"
+            )
         final_breakdown = self.engine.evaluate_full_breakdown(best_assignments)
         final_obj = final_breakdown.total_objective
         elapsed = time.perf_counter() - start_time

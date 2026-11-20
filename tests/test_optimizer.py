@@ -2,16 +2,30 @@ import sys
 import unittest
 from copy import deepcopy
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.csp.domain import build_domains, load_json
 from src.csp.optimizer import SimulatedAnnealingOptimizer, SoftConstraintEngine
-from src.csp.solver import TimetableCSPSolver, verify_solution
+from src.csp.solver import SolverStats, TimetableCSPSolver, verify_solution
 
 
 class TestPhase4SoftConstraintOptimizer(unittest.TestCase):
+    root: Path
+    schema: Dict[str, Any]
+    dataset: Dict[str, Any]
+    csp_raw: Dict[str, Any]
+    affinity_cfg: Dict[str, Any]
+    all_sessions: List[Dict[str, Any]]
+    primary_sessions: List[Dict[str, Any]]
+    venues: List[Dict[str, Any]]
+    solver_a: TimetableCSPSolver
+    init_assignments_a: Dict[str, Tuple[str, int, int | str]]
+    solve_stats_a: SolverStats
+    domains_a: Dict[str, List[Tuple[str, int, int | str]]]
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.root = Path(__file__).resolve().parents[1]
@@ -46,9 +60,10 @@ class TestPhase4SoftConstraintOptimizer(unittest.TestCase):
         for expected_rule in (
             "minimize_saturday_theory",
             "minimize_saturday_overflow",
+            "prefer_shared_practicals_on_saturday",
             "minimize_evening_twilight",
             "minimize_cohort_idle_gaps",
-            "balance_daily_workload",
+            "balance_weekly_workload",
             "prefer_exact_module_venue",
         ):
             self.assertIn(expected_rule, sc)

@@ -87,6 +87,7 @@ class TimetableCSPSolver:
         affinity_config: Dict[str, Any] | None = None,
         include_fallback_venues: bool = False,
         timeout_seconds: float = 60.0,
+        pinned_assignments: Dict[str, Tuple[int | str, int, int | str]] | None = None,
     ) -> None:
         self.sessions = sessions
         self.venues = venues
@@ -94,11 +95,14 @@ class TimetableCSPSolver:
         self.affinity_config = affinity_config
         self.include_fallback_venues = include_fallback_venues
         self.timeout_seconds = timeout_seconds
+        self.pinned_assignments = pinned_assignments
 
         grid = schema["calendar_grid"]
         self.periods_per_day: int = grid.get("periods_per_day", 18)
         active_days: List[str] = grid["active_days"]
+        self.active_days: List[str] = list(active_days)
         self.day_to_idx: Dict[str, int] = {d: i for i, d in enumerate(active_days)}
+        self.idx_to_day: Dict[int, str] = {i: d for i, d in enumerate(active_days)}
 
         # Map sessions and venues
         self.session_by_id: Dict[str, Dict[str, Any]] = {s["sessionId"]: s for s in sessions}
@@ -201,9 +205,12 @@ class TimetableCSPSolver:
 
         # Dynamic state structures for search
         self.venue_busy_mask: Dict[int | str, int] = {v["venueId"]: 0 for v in venues}
+        self.cohort_busy_mask: Dict[str, int] = defaultdict(int)
+        self.lecturer_busy_mask: Dict[str, int] = defaultdict(int)
         self.unassigned_vars: Set[str] = set(self.all_var_ids)
         self.unassigned_degree: Dict[str, int] = dict(self.static_degree)
         self.assignments: Dict[str, Tuple[str, int, int | str]] = {}
+        self.pinned_session_ids: Set[str] = set()
 
         # Track day loads per cohort and lecturer for day_load_spread tie-breaking
         self.cohort_day_load: Dict[Tuple[str, str], int] = defaultdict(int)
@@ -452,9 +459,147 @@ class TimetableCSPSolver:
                 self.pool_free_venue_count[(pool_key, day, p)] += 1
 
         for c in self.var_cohorts[sid]:
+            self.cohort_busy_mask[c] &= ~time_mask
             self.cohort_day_load[(c, day)] -= dur
         for l in self.var_lecturers[sid]:
+            self.lecturer_busy_mask[l] &= ~time_mask
             self.lecturer_day_load[(l, day)] -= dur
+
+    def _normalize_pin_tuple(
+        self, sid: str, raw_pin: Tuple[int | str, int, int | str]
+    ) -> Tuple[str, int, int | str]:
+        """
+        Normalizes a pin tuple `(day_idx_or_str, start_period, venue_id)` into `(day_str, start_period, canonical_venue_id)`.
+        Raises ValueError if `sid`, `day`, `start_period`, or `venue_id` is invalid.
+        """
+        if sid not in self.session_by_id:
+            raise ValueError(f"Invalid pin: session_id '{sid}' does not exist in the dataset.")
+
+        raw_day, raw_start_p, raw_vid = raw_pin
+        if isinstance(raw_day, int):
+            if raw_day not in self.idx_to_day:
+                raise ValueError(
+                    f"Invalid pin for session '{sid}': day_idx {raw_day} is out of range "
+                    f"(valid indices: 0..{len(self.active_days) - 1})."
+                )
+            day_str = self.idx_to_day[raw_day]
+        elif isinstance(raw_day, str):
+            d_up = raw_day.strip().upper()
+            if d_up in self.day_to_idx:
+                day_str = d_up
+            elif raw_day.strip().isdigit() and int(raw_day.strip()) in self.idx_to_day:
+                day_str = self.idx_to_day[int(raw_day.strip())]
+            else:
+                raise ValueError(
+                    f"Invalid pin for session '{sid}': day '{raw_day}' is not in active_days {self.active_days}."
+                )
+        else:
+            raise ValueError(f"Invalid pin for session '{sid}': unrecognized day '{raw_day}'.")
+
+        start_p = int(raw_start_p)
+        if (day_str, start_p) not in self.initial_time_slots[sid]:
+            raise ValueError(
+                f"Invalid pin for session '{sid}': time slot ({day_str}, start_period={start_p}) "
+                f"is not in the session's unary time domain."
+            )
+
+        # Match venue_id by exact type or string representation against compatible_venues[sid]
+        compat_vids = self.compatible_venues[sid]
+        matched_vid: Optional[int | str] = None
+        for cv in compat_vids:
+            if cv == raw_vid or str(cv) == str(raw_vid):
+                matched_vid = cv
+                break
+
+        if matched_vid is None:
+            raise ValueError(
+                f"Invalid pin for session '{sid}': venue_id '{raw_vid}' is not in the session's "
+                f"compatible venue pool {compat_vids}."
+            )
+
+        return day_str, start_p, matched_vid
+
+    def _validate_and_apply_pins(
+        self,
+        pinned_assignments: Dict[str, Tuple[int | str, int, int | str]],
+    ) -> bool:
+        """
+        1. Validates that every pinned session exists, its (day, start_period) is in its unary
+           time domain, and its venue_id is in its compatible venue pool.
+        2. Validates zero pairwise conflicts among pinned sessions (no shared lecturer, cohort,
+           or venue overlapping on the 108-bit time masks), raising a clear ValueError if any
+           pin is invalid or conflicts with another pin.
+        3. Pre-assigns all pinned sessions, updates 108-bit occupancy masks (`cohort_busy_mask`,
+           `lecturer_busy_mask`, `venue_busy_mask`), and runs eager forward-checking propagation
+           against unpinned neighbors before backtracking begins.
+        Returns False if forward-checking propagation detects an immediate domain wipeout on an
+        unpinned variable.
+        """
+        normalized_pins: List[Tuple[str, str, int, int | str, int]] = []
+        for sid, raw_pin in pinned_assignments.items():
+            day_str, start_p, vid = self._normalize_pin_tuple(sid, raw_pin)
+            dur = self.var_duration[sid]
+            t_mask = self.slot_to_Mask[(day_str, start_p, dur)]
+            normalized_pins.append((sid, day_str, start_p, vid, t_mask))
+
+        # Check all pairwise conflicts among pinned sessions on 108-bit time masks
+        n_pins = len(normalized_pins)
+        for i in range(n_pins):
+            sid_a, day_a, sp_a, vid_a, mask_a = normalized_pins[i]
+            lecs_a = set(self.var_lecturers[sid_a])
+            cohs_a = set(self.var_cohorts[sid_a])
+            for j in range(i + 1, n_pins):
+                sid_b, day_b, sp_b, vid_b, mask_b = normalized_pins[j]
+                if (mask_a & mask_b) == 0:
+                    continue
+                shared_lecs = sorted(lecs_a & set(self.var_lecturers[sid_b]))
+                if shared_lecs:
+                    raise ValueError(
+                        f"Pin conflict between '{sid_a}' and '{sid_b}' on {day_a}: "
+                        f"shared lecturer(s) {shared_lecs} overlap in time."
+                    )
+                shared_cohs = sorted(cohs_a & set(self.var_cohorts[sid_b]))
+                if shared_cohs:
+                    raise ValueError(
+                        f"Pin conflict between '{sid_a}' and '{sid_b}' on {day_a}: "
+                        f"shared cohort(s) {shared_cohs} overlap in time."
+                    )
+                if vid_a == vid_b:
+                    raise ValueError(
+                        f"Pin conflict between '{sid_a}' and '{sid_b}' on {day_a}: "
+                        f"venue '{vid_a}' is double-booked in overlapping periods."
+                    )
+
+        # First mark all pinned variables as assigned (removing them from unassigned_vars)
+        for sid, day_str, start_p, vid, t_mask in normalized_pins:
+            self.pinned_session_ids.add(sid)
+            self.unassigned_vars.remove(sid)
+            for nb in self.adj[sid]:
+                if nb in self.unassigned_vars:
+                    self.unassigned_degree[nb] -= 1
+
+            dur = self.var_duration[sid]
+            self.assignments[sid] = (day_str, start_p, vid)
+            self.venue_busy_mask[vid] |= t_mask
+            for pool_key in self.pools_by_venue[vid]:
+                for p in range(start_p, start_p + dur):
+                    self.pool_free_venue_count[(pool_key, day_str, p)] -= 1
+
+            for c in self.var_cohorts[sid]:
+                self.cohort_busy_mask[c] |= t_mask
+                self.cohort_day_load[(c, day_str)] += dur
+            for l in self.var_lecturers[sid]:
+                self.lecturer_busy_mask[l] |= t_mask
+                self.lecturer_day_load[(l, day_str)] += dur
+
+        # Now propagate forward checking from each pinned session against unpinned variables
+        pin_undo_log: List[Tuple[str, Tuple[str, int]]] = []
+        for sid, day_str, start_p, vid, _ in normalized_pins:
+            dur = self.var_duration[sid]
+            if not self.forward_check(sid, day_str, start_p, dur, vid, pin_undo_log):
+                return False
+
+        return True
 
     def _backtrack(self) -> bool:
         if not self.unassigned_vars:
@@ -492,8 +637,10 @@ class TimetableCSPSolver:
                     self.pool_free_venue_count[(pool_key, day, p)] -= 1
 
             for c in self.var_cohorts[sid]:
+                self.cohort_busy_mask[c] |= time_mask
                 self.cohort_day_load[(c, day)] += dur
             for l in self.var_lecturers[sid]:
+                self.lecturer_busy_mask[l] |= time_mask
                 self.lecturer_day_load[(l, day)] += dur
 
             undo_log: List[Tuple[str, Tuple[str, int]]] = []
@@ -513,14 +660,23 @@ class TimetableCSPSolver:
         self.backtracks += 1
         return False
 
-    def solve(self) -> Tuple[Dict[str, Tuple[str, int, int | str]], SolverStats]:
-        """Executes backtracking search and returns (assignments, stats)."""
+    def solve(
+        self,
+        pinned_assignments: Dict[str, Tuple[int | str, int, int | str]] | None = None,
+    ) -> Tuple[Dict[str, Tuple[str, int, int | str]], SolverStats]:
+        """Executes backtracking search (honoring any pinned_assignments) and returns (assignments, stats)."""
         required_limit = max(sys.getrecursionlimit(), len(self.sessions) * 3 + 1000)
         if sys.getrecursionlimit() < required_limit:
             sys.setrecursionlimit(required_limit)
 
         self._start_time = time.perf_counter()
         self._timed_out = False
+
+        active_pins = (
+            pinned_assignments
+            if pinned_assignments is not None
+            else self.pinned_assignments
+        )
 
         # Immediate check for any initial unary wipeout
         if any(len(slots) == 0 or len(self.compatible_venues[sid]) == 0
@@ -536,11 +692,33 @@ class TimetableCSPSolver:
                 assigned_count=0,
             )
 
+        if active_pins:
+            if not self._validate_and_apply_pins(active_pins):
+                elapsed = time.perf_counter() - self._start_time
+                return {}, SolverStats(
+                    total_variables=len(self.sessions),
+                    status="UNSATISFIABLE",
+                    runtime_seconds=elapsed,
+                    nodes_visited=0,
+                    backtracks=0,
+                    pruned_values=self.pruned_values,
+                    assigned_count=len(self.assignments),
+                )
+
         solved = self._backtrack()
         elapsed = time.perf_counter() - self._start_time
 
         if solved:
             status = "SOLVED"
+            # Verify that every pinned session still holds its exact pinned assignment
+            if active_pins:
+                for sid, raw_pin in active_pins.items():
+                    exp_day, exp_sp, exp_vid = self._normalize_pin_tuple(sid, raw_pin)
+                    if self.assignments.get(sid) != (exp_day, exp_sp, exp_vid):
+                        raise AssertionError(
+                            f"Pinned session '{sid}' was modified during search: "
+                            f"expected {(exp_day, exp_sp, exp_vid)}, got {self.assignments.get(sid)}"
+                        )
         elif self._timed_out:
             status = "TIMEOUT"
         else:
@@ -1005,6 +1183,7 @@ def run_benchmark(
     schema: Dict[str, Any],
     affinity_config: Dict[str, Any] | None = None,
     include_fallback_venues: bool = False,
+    pinned_assignments: Dict[str, Tuple[int | str, int, int | str]] | None = None,
 ) -> Tuple[Dict[str, Tuple[str, int, int | str]], SolverStats, Dict[str, Any], TimetableCSPSolver]:
     print(f"\n{'=' * 72}")
     print(f"  {label}")
@@ -1032,8 +1211,9 @@ def run_benchmark(
         schema=schema,
         affinity_config=affinity_config,
         include_fallback_venues=include_fallback_venues,
+        pinned_assignments=pinned_assignments,
     )
-    assignments, stats = solver.solve()
+    assignments, stats = solver.solve(pinned_assignments=pinned_assignments)
 
     print(f"  Total Variables (|X|)      : {stats.total_variables}")
     print(f"  Conflict Graph Edges (|E|) : {solver.graph_diagnostics['num_edges']:,}")
@@ -1113,6 +1293,7 @@ def run_benchmark(
         compatible_venues=solver.compatible_venues,
         venue_tier_label=solver.venue_tier_label,
         affinity_config=affinity_config,
+        pinned_session_ids=set(pinned_assignments.keys()) if pinned_assignments else None,
     )
     opt_assignments, opt_stats = optimizer.optimize()
     opt_verification = verify_solution(
