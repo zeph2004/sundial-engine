@@ -110,6 +110,16 @@
       "weight": 100.0,
       "params": {}
     },
+    "prefer_shared_practicals_on_saturday": {
+      "enabled": true,
+      "weight": 80.0,
+      "params": {
+        "theory_types": ["Theory", "Lecture", "Tutorial"],
+        "min_shared_cohorts": 2,
+        "solo_practical_multiplier": 1.0,
+        "theory_multiplier": 2.0
+      }
+    },
     "minimize_evening_twilight": {
       "enabled": true,
       "weight": 60.0,
@@ -120,15 +130,16 @@
     "minimize_cohort_idle_gaps": {
       "enabled": true,
       "weight": 25.0,
-      "params": {}
+      "params": {
+        "allowed_weekday_free_gaps": 2
+      }
     },
-    "balance_daily_workload": {
+    "balance_weekly_workload": {
       "enabled": true,
       "weight": 20.0,
       "params": {
-        "cohort_ft_max_periods": 8,
-        "cohort_eve_max_periods": 4,
-        "lecturer_max_periods": 6
+        "cohort_weight": 1.0,
+        "lecturer_weight": 0.5
       }
     },
     "prefer_exact_module_venue": {

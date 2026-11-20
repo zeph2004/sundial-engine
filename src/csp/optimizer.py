@@ -93,25 +93,117 @@ class OptimizerStats:
         }
 
 
+# Pluggable Soft-Constraint Decorator Registry
+REGISTERED_SOFT_CONSTRAINTS: Dict[str, SoftConstraintRule] = {}
+
+
+def register_soft_constraint(
+    name: str,
+    description: str = "",
+    scope: str = "session",
+    default_weight: float = 1.0,
+    default_params: Optional[Dict[str, Any]] = None,
+    delta_fn: Optional[Callable[..., float]] = None,
+) -> Callable[[Callable[..., float]], Callable[..., float]]:
+    """
+    Decorator for registering pluggable soft-constraint rules (and optional O(1) delta_fn).
+    """
+
+    def _decorator(fn: Callable[..., float]) -> Callable[..., float]:
+        rule = SoftConstraintRule(
+            name=name,
+            description=description or (fn.__doc__ or "").strip(),
+            scope=scope,
+            default_weight=default_weight,
+            default_params=dict(default_params or {}),
+        )
+        setattr(fn, "_soft_constraint_rule", rule)
+        setattr(fn, "delta_fn", delta_fn)
+        REGISTERED_SOFT_CONSTRAINTS[name] = rule
+        return fn
+
+    return _decorator
+
+
+@register_soft_constraint(
+    "prefer_shared_practicals_on_saturday",
+    description=(
+        "Prefers multi-cohort Shared Practicals on Saturday (0 penalty) over Solo Practicals "
+        "(1x duration) and Theory sessions (2x duration)."
+    ),
+    scope="session",
+    default_weight=80.0,
+    default_params={
+        "theory_types": ["Theory", "Lecture", "Tutorial"],
+        "min_shared_cohorts": 2,
+        "solo_practical_multiplier": 1.0,
+        "theory_multiplier": 2.0,
+    },
+)
+def evaluate_prefer_shared_practicals_on_saturday(
+    day_idx: int,
+    saturday_idx: int,
+    is_theory: bool,
+    num_cohorts: int,
+    duration: int,
+    min_shared_cohorts: int = 2,
+    solo_practical_multiplier: float = 1.0,
+    theory_multiplier: float = 2.0,
+) -> float:
+    """
+    Computes raw penalty for `prefer_shared_practicals_on_saturday`:
+      - Not on Saturday (`day_idx != saturday_idx`): 0.0
+      - Shared Practical (`not is_theory` and `num_cohorts >= min_shared_cohorts`): 0.0
+      - Solo Practical (`not is_theory` and `num_cohorts < min_shared_cohorts`): `solo_practical_multiplier * duration`
+      - Theory (`is_theory`): `theory_multiplier * duration`
+    """
+    if day_idx != saturday_idx:
+        return 0.0
+    if is_theory:
+        return theory_multiplier * float(duration)
+    if num_cohorts >= min_shared_cohorts:
+        return 0.0
+    return solo_practical_multiplier * float(duration)
+
+
+def delta_prefer_shared_practicals_on_saturday(
+    old_day_idx: int,
+    new_day_idx: int,
+    saturday_idx: int,
+    raw_saturday_penalty: float,
+    weight: float,
+) -> float:
+    """O(1) incremental delta_fn for `prefer_shared_practicals_on_saturday`."""
+    if old_day_idx == new_day_idx or weight == 0.0 or raw_saturday_penalty == 0.0:
+        return 0.0
+    if new_day_idx == saturday_idx:
+        return weight * raw_saturday_penalty
+    if old_day_idx == saturday_idx:
+        return -weight * raw_saturday_penalty
+    return 0.0
+
+
 class SoftConstraintEngine:
     """
     Declarative, Pluggable Soft-Constraint Engine.
     Reads `"soft_constraints"` from `configs/institution_schema.json` and supports:
       1. `minimize_saturday_theory`: Penalizes Theory/Lecture/Tutorial sessions placed on Saturday.
       2. `minimize_saturday_overflow`: Penalizes any session (per period) placed on Saturday.
-      3. `minimize_evening_twilight`: Penalizes evening sessions occupying twilight buffer periods (P11-P12).
-      4. `minimize_cohort_idle_gaps`: Penalizes idle periods and distinct gaps between a cohort's first and last class of the day.
-      5. `balance_daily_workload`: Quadratic overload penalty when a cohort or lecturer exceeds daily target periods.
-      6. `prefer_exact_module_venue`: Penalizes non-1A venue tiers (1B Cohort Home, 1C Dept Pool, Tier 2 General Overflow).
+      3. `prefer_shared_practicals_on_saturday`: Penalizes Theory (2x) and Solo Practicals (1x) on Saturday while allowing Shared Practicals (>=2 cohorts) at 0 penalty.
+      4. `minimize_evening_twilight`: Penalizes evening sessions occupying twilight buffer periods (P11-P12).
+      5. `minimize_cohort_idle_gaps`: Penalizes idle periods and distinct gaps between a cohort's first and last class of the day (with weekday breathing room `allowed_weekday_free_gaps`).
+      6. `balance_weekly_workload`: Balances a cohort's or lecturer's weekly teaching load evenly across active days by penalizing deviations above their ideal daily average (`ceil(total_weekly_periods / target_days)`).
+      7. `prefer_exact_module_venue`: Penalizes non-1A venue tiers (1B Cohort Home, 1C Dept Pool, Tier 2 General Overflow).
     Also supports registering custom pluggable session-level or day-level rules at runtime.
     """
 
     BUILTIN_RULE_ORDER: Tuple[str, ...] = (
         "minimize_saturday_theory",
         "minimize_saturday_overflow",
+        "prefer_shared_practicals_on_saturday",
         "minimize_evening_twilight",
         "minimize_cohort_idle_gaps",
-        "balance_daily_workload",
+        "balance_weekly_workload",
         "prefer_exact_module_venue",
     )
 
@@ -176,6 +268,19 @@ class SoftConstraintEngine:
         c_sat_ov = self.rule_configs["minimize_saturday_overflow"]
         self.w_sat_overflow: float = c_sat_ov["weight"] if c_sat_ov["enabled"] else 0.0
 
+        c_sat_sp = self.rule_configs["prefer_shared_practicals_on_saturday"]
+        self.w_sat_shared_prac: float = c_sat_sp["weight"] if c_sat_sp["enabled"] else 0.0
+        self.sat_sp_theory_types: Set[str] = set(
+            c_sat_sp["params"].get("theory_types", ["Theory", "Lecture", "Tutorial"])
+        )
+        self.min_shared_cohorts: int = int(c_sat_sp["params"].get("min_shared_cohorts", 2))
+        self.solo_practical_multiplier: float = float(
+            c_sat_sp["params"].get("solo_practical_multiplier", 1.0)
+        )
+        self.theory_multiplier: float = float(
+            c_sat_sp["params"].get("theory_multiplier", 2.0)
+        )
+
         c_twi = self.rule_configs["minimize_evening_twilight"]
         self.w_twilight: float = c_twi["weight"] if c_twi["enabled"] else 0.0
         self.twilight_periods: Set[int] = set(
@@ -188,9 +293,18 @@ class SoftConstraintEngine:
 
         c_gaps = self.rule_configs["minimize_cohort_idle_gaps"]
         self.w_idle_gaps: float = c_gaps["weight"] if c_gaps["enabled"] else 0.0
+        self.allowed_weekday_free_gaps: int = int(
+            c_gaps["params"].get("allowed_weekday_free_gaps", 2)
+        )
 
-        c_bal = self.rule_configs["balance_daily_workload"]
+        c_bal = self.rule_configs["balance_weekly_workload"]
         self.w_workload: float = c_bal["weight"] if c_bal["enabled"] else 0.0
+        self.cohort_workload_weight: float = float(
+            c_bal["params"].get("cohort_weight", 1.0)
+        )
+        self.lecturer_workload_weight: float = float(
+            c_bal["params"].get("lecturer_weight", 0.5)
+        )
         self.cohort_ft_max_periods: int = int(
             c_bal["params"].get("cohort_ft_max_periods", 8)
         )
@@ -199,6 +313,27 @@ class SoftConstraintEngine:
         )
         self.lecturer_max_periods: int = int(
             c_bal["params"].get("lecturer_max_periods", 6)
+        )
+        self.min_weekday_free_periods: int = int(
+            c_bal["params"].get("min_weekday_free_periods", 2)
+        )
+        streams_cfg = schema.get("streams", {})
+        ft_cfg = streams_cfg.get("full_time", {})
+        eve_cfg = streams_cfg.get("evening", {})
+        self.ft_stream_daily_periods: int = int(
+            ft_cfg.get("max_period", 12) - ft_cfg.get("min_period", 1) + 1
+        )
+        self.eve_stream_daily_periods: int = int(
+            eve_cfg.get("max_period", 18) - eve_cfg.get("min_period", 13) + 1
+        )
+        self.cohort_ft_weekday_max_periods: int = max(
+            1, self.ft_stream_daily_periods - self.min_weekday_free_periods
+        )
+        self.cohort_eve_weekday_max_periods: int = max(
+            1, self.eve_stream_daily_periods - self.min_weekday_free_periods
+        )
+        self.lecturer_weekday_max_periods: int = max(
+            1, self.ft_stream_daily_periods - self.min_weekday_free_periods
         )
 
         c_ven = self.rule_configs["prefer_exact_module_venue"]
@@ -218,14 +353,18 @@ class SoftConstraintEngine:
         self._day_mask_gap_info: Dict[int, Tuple[int, int, int]] = {0: (0, 0, 0)}
         # (busy_periods, distinct_idle_gaps, total_idle_gap_periods)
 
-        # Catalog cohorts and lecturers
+        # Catalog cohorts and lecturers and compute adaptive weekly workload targets
         self.cohort_is_evening: Dict[str, bool] = {}
         self.all_cohorts: List[str] = []
         self.all_lecturers: List[str] = []
+        self.cohort_total_weekly_periods: Dict[str, int] = defaultdict(int)
+        self.cohort_6p_blocks: Dict[str, int] = defaultdict(int)
+        self.lecturer_total_weekly_periods: Dict[str, int] = defaultdict(int)
         coh_set: Set[str] = set()
         lec_set: Set[str] = set()
         for s in sessions:
             is_eve = bool(s.get("isEveningStream", False))
+            dur = int(s["durationPeriods"])
             for c in s.get("targetCohorts", []):
                 if c not in coh_set:
                     coh_set.add(c)
@@ -234,25 +373,92 @@ class SoftConstraintEngine:
                     self.cohort_is_evening[c] = True
                 elif c not in self.cohort_is_evening:
                     self.cohort_is_evening[c] = False
+                self.cohort_total_weekly_periods[c] += dur
+                if dur == 6:
+                    self.cohort_6p_blocks[c] += 1
             for l in s.get("lecturers", []):
                 if l not in lec_set:
                     lec_set.add(l)
                     self.all_lecturers.append(l)
+                self.lecturer_total_weekly_periods[l] += dur
 
         self.all_cohorts.sort()
         self.all_lecturers.sort()
+
+        # Precompute per-cohort and per-lecturer daily target cap for balance_weekly_workload:
+        # Ideal daily load = ceil(total_weekly_periods / target_active_days) (5 days for Mon-Fri cohorts, 6 for Cond-1 Saturday cohorts),
+        # capped on weekdays by the stream's free-period floor (stream_daily_periods - min_weekday_free_periods).
+        self.cohort_daily_target: Dict[str, int] = {}
+        self.cohort_weekday_target: Dict[str, int] = {}
+        for c in self.all_cohorts:
+            is_eve_c = self.cohort_is_evening.get(c, False)
+            tot_p = self.cohort_total_weekly_periods[c]
+            is_cond1 = (
+                (tot_p > 30)
+                if is_eve_c
+                else (tot_p > 60 or self.cohort_6p_blocks[c] > 5)
+            )
+            spread_days = 6 if is_cond1 else 5
+            ideal_daily = max(1, math.ceil(tot_p / spread_days))
+            wk_floor_cap = (
+                self.cohort_eve_weekday_max_periods
+                if is_eve_c
+                else self.cohort_ft_weekday_max_periods
+            )
+            self.cohort_daily_target[c] = ideal_daily
+            self.cohort_weekday_target[c] = min(ideal_daily, wk_floor_cap)
+
+        self.lecturer_daily_target: Dict[str, int] = {}
+        self.lecturer_weekday_target: Dict[str, int] = {}
+        for l in self.all_lecturers:
+            tot_p = self.lecturer_total_weekly_periods[l]
+            spread_days = 6 if tot_p > 50 else 5
+            ideal_daily = max(self.lecturer_max_periods, math.ceil(tot_p / spread_days))
+            self.lecturer_daily_target[l] = ideal_daily
+            self.lecturer_weekday_target[l] = min(
+                ideal_daily, self.lecturer_weekday_max_periods
+            )
 
         # Precompute per-session venue penalty multiplier for every (sid, vid)
         self.session_venue_raw_penalty: Dict[str, Dict[int | str, float]] = {}
         self.session_is_theory: Dict[str, bool] = {}
         self.session_is_evening: Dict[str, bool] = {}
         self.session_duration: Dict[str, int] = {}
+        self.session_num_cohorts: Dict[str, int] = {}
+        self.session_is_shared_practical: Dict[str, bool] = {}
+        self.session_is_solo_practical: Dict[str, bool] = {}
+        self.session_sat_shared_prac_raw_penalty: Dict[str, float] = {}
 
         for s in sessions:
             sid = s["sessionId"]
-            self.session_is_theory[sid] = s.get("sessionType", "Theory") in self.theory_types
+            stype = s.get("sessionType", "Theory")
+            is_th = stype in self.theory_types
+            is_sp_th = stype in self.sat_sp_theory_types
+            dur = int(s["durationPeriods"])
+            ncoh = len(s.get("targetCohorts", []))
+
+            self.session_is_theory[sid] = is_th
             self.session_is_evening[sid] = bool(s.get("isEveningStream", False))
-            self.session_duration[sid] = int(s["durationPeriods"])
+            self.session_duration[sid] = dur
+            self.session_num_cohorts[sid] = ncoh
+            self.session_is_shared_practical[sid] = (not is_sp_th) and (
+                ncoh >= self.min_shared_cohorts
+            )
+            self.session_is_solo_practical[sid] = (not is_sp_th) and (
+                ncoh < self.min_shared_cohorts
+            )
+            self.session_sat_shared_prac_raw_penalty[sid] = (
+                evaluate_prefer_shared_practicals_on_saturday(
+                    day_idx=self.saturday_idx,
+                    saturday_idx=self.saturday_idx,
+                    is_theory=is_sp_th,
+                    num_cohorts=ncoh,
+                    duration=dur,
+                    min_shared_cohorts=self.min_shared_cohorts,
+                    solo_practical_multiplier=self.solo_practical_multiplier,
+                    theory_multiplier=self.theory_multiplier,
+                )
+            )
 
             v_pen: Dict[int | str, float] = {}
             for vid, lbl in self.venue_tier_label.get(sid, {}).items():
@@ -326,37 +532,137 @@ class SoftConstraintEngine:
         self._day_mask_gap_info[day_mask] = res
         return res
 
-    def cohort_day_cost(self, day_mask: int, is_evening_cohort: bool) -> float:
+    def cohort_idle_gaps_raw_and_count(
+        self, day_mask: int, day_idx: int = 0
+    ) -> Tuple[float, int]:
         """
-        Computes the weighted soft penalty for a single `(cohort, day)` 18-bit occupancy mask:
-          - `minimize_cohort_idle_gaps`: `w_idle_gaps * (distinct_gaps + 0.25 * idle_periods)`
-          - `balance_daily_workload`: `w_workload * max(0, busy_periods - max_target)`
+        Computes `(raw_penalty, penalized_gap_count)` for `minimize_cohort_idle_gaps` on `(cohort, day_idx)`:
+          - On weekdays (`day_idx < 5`), allows up to `allowed_weekday_free_gaps` free/idle periods
+            between a cohort's first and last class with 0 penalty:
+            `penalized_gaps = max(0, gaps - allowed_weekday_free_gaps)`
+          - On Saturday (`day_idx == 5`), keeps `penalized_gaps = gaps`.
+        """
+        if day_mask == 0:
+            return 0.0, 0
+        _, distinct_gaps, idle_periods = self.analyze_day_mask(day_mask)
+        if idle_periods <= 0:
+            return 0.0, 0
+        if day_idx < 5:
+            penalized_gaps = max(0, idle_periods - self.allowed_weekday_free_gaps)
+            if penalized_gaps <= 0:
+                return 0.0, 0
+            return distinct_gaps + 0.25 * float(penalized_gaps), distinct_gaps
+        else:
+            penalized_gaps = idle_periods
+            return distinct_gaps + 0.25 * float(penalized_gaps), distinct_gaps
+
+    def cohort_day_cost(
+        self,
+        day_mask: int,
+        is_evening_cohort: bool,
+        day_idx: int = 0,
+        cohort_id: Optional[str] = None,
+    ) -> float:
+        """
+        Computes the weighted soft penalty for a single `(cohort, day_idx)` 18-bit occupancy mask:
+          - `minimize_cohort_idle_gaps`: `w_idle_gaps * (distinct_gaps + 0.25 * penalized_gaps)`
+            (0 when `penalized_gaps == 0`, with weekday breathing room `allowed_weekday_free_gaps`)
+          - `balance_weekly_workload`: `w_workload * cohort_weight * max(0, busy_periods - target_daily_periods)`
         """
         if day_mask == 0:
             return 0.0
         busy, distinct_gaps, idle_periods = self.analyze_day_mask(day_mask)
         cost = 0.0
         if self.w_idle_gaps > 0.0 and idle_periods > 0:
-            cost += self.w_idle_gaps * (distinct_gaps + 0.25 * idle_periods)
-        if self.w_workload > 0.0:
-            max_p = self.cohort_eve_max_periods if is_evening_cohort else self.cohort_ft_max_periods
+            penalized_gaps = (
+                max(0, idle_periods - self.allowed_weekday_free_gaps)
+                if day_idx < 5
+                else idle_periods
+            )
+            if penalized_gaps > 0:
+                cost += self.w_idle_gaps * (distinct_gaps + 0.25 * float(penalized_gaps))
+        if self.w_workload > 0.0 and self.cohort_workload_weight > 0.0:
+            if cohort_id is not None and cohort_id in self.cohort_daily_target:
+                max_p = (
+                    self.cohort_weekday_target[cohort_id]
+                    if day_idx < 5
+                    else self.cohort_daily_target[cohort_id]
+                )
+            elif day_idx < 5:
+                max_p = (
+                    self.cohort_eve_weekday_max_periods
+                    if is_evening_cohort
+                    else self.cohort_ft_weekday_max_periods
+                )
+            else:
+                max_p = (
+                    self.cohort_eve_max_periods
+                    if is_evening_cohort
+                    else self.cohort_ft_max_periods
+                )
             if busy > max_p:
                 excess = busy - max_p
-                cost += self.w_workload * float(excess)
+                cost += self.w_workload * self.cohort_workload_weight * float(excess)
         return cost
 
-    def lecturer_day_cost(self, day_mask: int) -> float:
+    def cohort_day_delta_fn(
+        self,
+        old_mask: int,
+        new_mask: int,
+        is_evening_cohort: bool,
+        day_idx: int = 0,
+        cohort_id: Optional[str] = None,
+    ) -> float:
+        """O(1) delta_fn for `(cohort, day_idx)` idle gaps + weekly workload balance."""
+        if old_mask == new_mask:
+            return 0.0
+        return self.cohort_day_cost(
+            new_mask, is_evening_cohort, day_idx, cohort_id
+        ) - self.cohort_day_cost(old_mask, is_evening_cohort, day_idx, cohort_id)
+
+    def lecturer_day_cost(
+        self,
+        day_mask: int,
+        day_idx: int = 0,
+        lecturer_id: Optional[str] = None,
+    ) -> float:
         """
-        Computes the weighted soft penalty for a single `(lecturer, day)` 18-bit occupancy mask:
-          - `balance_daily_workload`: `w_workload * max(0, busy_periods - lecturer_max_periods)`
+        Computes the weighted soft penalty for a single `(lecturer, day_idx)` 18-bit occupancy mask:
+          - `balance_weekly_workload`: `w_workload * lecturer_weight * max(0, busy_periods - target_lecturer_periods)`
         """
-        if day_mask == 0 or self.w_workload <= 0.0:
+        if day_mask == 0 or self.w_workload <= 0.0 or self.lecturer_workload_weight <= 0.0:
             return 0.0
         busy = day_mask.bit_count()
-        if busy > self.lecturer_max_periods:
-            excess = busy - self.lecturer_max_periods
-            return self.w_workload * float(excess)
+        if lecturer_id is not None and lecturer_id in self.lecturer_daily_target:
+            max_p = (
+                self.lecturer_weekday_target[lecturer_id]
+                if day_idx < 5
+                else self.lecturer_daily_target[lecturer_id]
+            )
+        else:
+            max_p = (
+                self.lecturer_weekday_max_periods
+                if day_idx < 5
+                else self.lecturer_max_periods
+            )
+        if busy > max_p:
+            excess = busy - max_p
+            return self.w_workload * self.lecturer_workload_weight * float(excess)
         return 0.0
+
+    def lecturer_day_delta_fn(
+        self,
+        old_mask: int,
+        new_mask: int,
+        day_idx: int = 0,
+        lecturer_id: Optional[str] = None,
+    ) -> float:
+        """O(1) delta_fn for `(lecturer, day_idx)` weekly workload balance."""
+        if old_mask == new_mask:
+            return 0.0
+        return self.lecturer_day_cost(
+            new_mask, day_idx, lecturer_id
+        ) - self.lecturer_day_cost(old_mask, day_idx, lecturer_id)
 
     def session_placement_cost(
         self,
@@ -370,6 +676,7 @@ class SoftConstraintEngine:
         Computes the weighted unary session placement penalty for `sid` at `(day_idx, start_p, vid)`:
           - `minimize_saturday_theory`
           - `minimize_saturday_overflow`
+          - `prefer_shared_practicals_on_saturday`
           - `minimize_evening_twilight`
           - `prefer_exact_module_venue`
           - plus any registered custom session rules.
@@ -382,6 +689,10 @@ class SoftConstraintEngine:
                 cost += self.w_sat_theory * float(dur)
             if self.w_sat_overflow > 0.0:
                 cost += self.w_sat_overflow * float(dur)
+            if self.w_sat_shared_prac > 0.0:
+                raw_sp = self.session_sat_shared_prac_raw_penalty[sid]
+                if raw_sp > 0.0:
+                    cost += self.w_sat_shared_prac * raw_sp
 
         if self.w_twilight > 0.0 and self.session_is_evening[sid]:
             twi_periods = (day_local_mask & self.twilight_day_mask).bit_count()
@@ -435,22 +746,26 @@ class SoftConstraintEngine:
             for l in s.get("lecturers", []):
                 lecturer_day_masks[(l, d_idx)] |= local_mask
 
-            # 1. minimize_saturday_theory & 2. minimize_saturday_overflow
+            # 1. minimize_saturday_theory, 2. minimize_saturday_overflow & 3. prefer_shared_practicals_on_saturday
             if d_idx == self.saturday_idx:
                 if self.session_is_theory[sid]:
                     raw_by_rule["minimize_saturday_theory"] += float(dur)
                     counts_by_rule["minimize_saturday_theory"] += 1
                 raw_by_rule["minimize_saturday_overflow"] += float(dur)
                 counts_by_rule["minimize_saturday_overflow"] += 1
+                raw_sp = self.session_sat_shared_prac_raw_penalty[sid]
+                if raw_sp > 0.0:
+                    raw_by_rule["prefer_shared_practicals_on_saturday"] += raw_sp
+                    counts_by_rule["prefer_shared_practicals_on_saturday"] += 1
 
-            # 3. minimize_evening_twilight
+            # 4. minimize_evening_twilight
             if self.session_is_evening[sid]:
                 twi_periods = (local_mask & self.twilight_day_mask).bit_count()
                 if twi_periods > 0:
                     raw_by_rule["minimize_evening_twilight"] += float(twi_periods)
                     counts_by_rule["minimize_evening_twilight"] += 1
 
-            # 6. prefer_exact_module_venue
+            # 7. prefer_exact_module_venue
             raw_vpen = self.session_venue_raw_penalty[sid].get(vid, 0.0)
             if raw_vpen > 0.0:
                 raw_by_rule["prefer_exact_module_venue"] += raw_vpen * float(dur)
@@ -463,34 +778,47 @@ class SoftConstraintEngine:
                     raw_by_rule[cname] += val
                     counts_by_rule[cname] += 1
 
-        # 4. minimize_cohort_idle_gaps & 5a. cohort daily workload balance
+        # 5. minimize_cohort_idle_gaps & 6a. cohort weekly workload balance
         for c in self.all_cohorts:
-            is_eve_c = self.cohort_is_evening.get(c, False)
-            max_p = self.cohort_eve_max_periods if is_eve_c else self.cohort_ft_max_periods
             for d_idx in range(self.num_days):
                 d_mask = cohort_day_masks.get((c, d_idx), 0)
                 if d_mask == 0:
                     continue
-                busy, distinct_gaps, idle_periods = self.analyze_day_mask(d_mask)
-                if idle_periods > 0:
-                    raw_by_rule["minimize_cohort_idle_gaps"] += distinct_gaps + 0.25 * idle_periods
-                    counts_by_rule["minimize_cohort_idle_gaps"] += distinct_gaps
-                if busy > max_p:
+                busy, _, _ = self.analyze_day_mask(d_mask)
+                gap_raw, gap_cnt = self.cohort_idle_gaps_raw_and_count(d_mask, d_idx)
+                if gap_raw > 0.0:
+                    raw_by_rule["minimize_cohort_idle_gaps"] += gap_raw
+                    counts_by_rule["minimize_cohort_idle_gaps"] += gap_cnt
+                max_p = (
+                    self.cohort_weekday_target[c]
+                    if d_idx < 5
+                    else self.cohort_daily_target[c]
+                )
+                if busy > max_p and self.cohort_workload_weight > 0.0:
                     excess = busy - max_p
-                    raw_by_rule["balance_daily_workload"] += float(excess)
-                    counts_by_rule["balance_daily_workload"] += 1
+                    raw_by_rule["balance_weekly_workload"] += (
+                        self.cohort_workload_weight * float(excess)
+                    )
+                    counts_by_rule["balance_weekly_workload"] += 1
 
-        # 5b. lecturer daily workload balance
+        # 6b. lecturer weekly workload balance
         for l in self.all_lecturers:
             for d_idx in range(self.num_days):
                 d_mask = lecturer_day_masks.get((l, d_idx), 0)
                 if d_mask == 0:
                     continue
                 busy = d_mask.bit_count()
-                if busy > self.lecturer_max_periods:
-                    excess = busy - self.lecturer_max_periods
-                    raw_by_rule["balance_daily_workload"] += float(excess)
-                    counts_by_rule["balance_daily_workload"] += 1
+                max_p = (
+                    self.lecturer_weekday_target[l]
+                    if d_idx < 5
+                    else self.lecturer_daily_target[l]
+                )
+                if busy > max_p and self.lecturer_workload_weight > 0.0:
+                    excess = busy - max_p
+                    raw_by_rule["balance_weekly_workload"] += (
+                        self.lecturer_workload_weight * float(excess)
+                    )
+                    counts_by_rule["balance_weekly_workload"] += 1
 
         weighted_by_rule: Dict[str, float] = {}
         total_obj = 0.0
@@ -585,6 +913,10 @@ class SimulatedAnnealingOptimizer:
         self.sids_by_stream_dur: Dict[Tuple[bool, int], List[str]] = defaultdict(list)
         # Also group sessions by shared cohort for targeted intra-cohort compaction swaps
         self.sids_by_cohort_dur: Dict[Tuple[str, int], List[str]] = defaultdict(list)
+        # Group Shared Practical sessions (and all Practical sessions) by (is_evening, duration) and (cohort, duration)
+        self.shared_prac_by_stream_dur: Dict[Tuple[bool, int], List[str]] = defaultdict(list)
+        self.shared_prac_by_cohort_dur: Dict[Tuple[str, int], List[str]] = defaultdict(list)
+        self.any_prac_by_cohort_dur: Dict[Tuple[str, int], List[str]] = defaultdict(list)
 
         valid_slots_cache: Dict[Tuple[bool, int], Tuple[Tuple[int, int, int, int], ...]] = {}
         weekday_slots_cache: Dict[Tuple[bool, int], Tuple[Tuple[int, int, int, int], ...]] = {}
@@ -646,8 +978,16 @@ class SimulatedAnnealingOptimizer:
             )
 
             self.sids_by_stream_dur[(is_eve, dur)].append(sid)
+            is_shared_prac = self.engine.session_is_shared_practical[sid]
+            is_any_prac = is_shared_prac or self.engine.session_is_solo_practical[sid]
+            if is_shared_prac:
+                self.shared_prac_by_stream_dur[(is_eve, dur)].append(sid)
             for c in cohs:
                 self.sids_by_cohort_dur[(c, dur)].append(sid)
+                if is_shared_prac:
+                    self.shared_prac_by_cohort_dur[(c, dur)].append(sid)
+                if is_any_prac:
+                    self.any_prac_by_cohort_dur[(c, dur)].append(sid)
 
         self.swappable_cohort_dur_groups: List[List[str]] = [
             grp for grp in self.sids_by_cohort_dur.values() if len(grp) >= 2
@@ -693,12 +1033,14 @@ class SimulatedAnnealingOptimizer:
             self.current_objective += sc
 
         for (c, d_idx), d_mask in list(self.cohort_day_18.items()):
-            cc = self.engine.cohort_day_cost(d_mask, self.engine.cohort_is_evening.get(c, False))
+            cc = self.engine.cohort_day_cost(
+                d_mask, self.engine.cohort_is_evening.get(c, False), d_idx, c
+            )
             self.cohort_day_cost_cache[(c, d_idx)] = cc
             self.current_objective += cc
 
         for (l, d_idx), d_mask in list(self.lecturer_day_18.items()):
-            lc = self.engine.lecturer_day_cost(d_mask)
+            lc = self.engine.lecturer_day_cost(d_mask, d_idx, l)
             self.lecturer_day_cost_cache[(l, d_idx)] = lc
             self.current_objective += lc
 
@@ -847,7 +1189,12 @@ class SimulatedAnnealingOptimizer:
             for c in cohs:
                 key = (c, old_d_idx)
                 new_cmask = (coh_day_18[key] & ~old_l_mask) | new_l_mask
-                delta_e += self.engine.cohort_day_cost(new_cmask, coh_is_eve.get(c, False)) - coh_cost_cache[key]
+                delta_e += (
+                    self.engine.cohort_day_cost(
+                        new_cmask, coh_is_eve.get(c, False), old_d_idx, c
+                    )
+                    - coh_cost_cache[key]
+                )
             # Note: on the same day, lecturer busy period count doesn't change for a single session move!
         else:
             for c in cohs:
@@ -857,9 +1204,9 @@ class SimulatedAnnealingOptimizer:
                 cmask_old = coh_day_18[k_old] & ~old_l_mask
                 cmask_new = coh_day_18[k_new] | new_l_mask
                 delta_e += (
-                    self.engine.cohort_day_cost(cmask_old, is_eve_c)
+                    self.engine.cohort_day_cost(cmask_old, is_eve_c, old_d_idx, c)
                     - coh_cost_cache[k_old]
-                    + self.engine.cohort_day_cost(cmask_new, is_eve_c)
+                    + self.engine.cohort_day_cost(cmask_new, is_eve_c, new_d_idx, c)
                     - coh_cost_cache[k_new]
                 )
             for l in lecs:
@@ -868,9 +1215,9 @@ class SimulatedAnnealingOptimizer:
                 lmask_old = lec_day_18[k_old] & ~old_l_mask
                 lmask_new = lec_day_18[k_new] | new_l_mask
                 delta_e += (
-                    self.engine.lecturer_day_cost(lmask_old)
+                    self.engine.lecturer_day_cost(lmask_old, old_d_idx, l)
                     - lec_cost_cache[k_old]
-                    + self.engine.lecturer_day_cost(lmask_new)
+                    + self.engine.lecturer_day_cost(lmask_new, new_d_idx, l)
                     - lec_cost_cache[k_new]
                 )
 
@@ -888,7 +1235,9 @@ class SimulatedAnnealingOptimizer:
                     key = (c, old_d_idx)
                     new_cmask = (coh_day_18[key] & ~old_l_mask) | new_l_mask
                     coh_day_18[key] = new_cmask
-                    coh_cost_cache[key] = self.engine.cohort_day_cost(new_cmask, coh_is_eve.get(c, False))
+                    coh_cost_cache[key] = self.engine.cohort_day_cost(
+                        new_cmask, coh_is_eve.get(c, False), old_d_idx, c
+                    )
                 for l in lecs:
                     key = (l, old_d_idx)
                     lec_day_18[key] = (lec_day_18[key] & ~old_l_mask) | new_l_mask
@@ -901,8 +1250,12 @@ class SimulatedAnnealingOptimizer:
                     cmask_new = coh_day_18[k_new] | new_l_mask
                     coh_day_18[k_old] = cmask_old
                     coh_day_18[k_new] = cmask_new
-                    coh_cost_cache[k_old] = self.engine.cohort_day_cost(cmask_old, is_eve_c)
-                    coh_cost_cache[k_new] = self.engine.cohort_day_cost(cmask_new, is_eve_c)
+                    coh_cost_cache[k_old] = self.engine.cohort_day_cost(
+                        cmask_old, is_eve_c, old_d_idx, c
+                    )
+                    coh_cost_cache[k_new] = self.engine.cohort_day_cost(
+                        cmask_new, is_eve_c, new_d_idx, c
+                    )
                 for l in lecs:
                     k_old = (l, old_d_idx)
                     k_new = (l, new_d_idx)
@@ -910,8 +1263,12 @@ class SimulatedAnnealingOptimizer:
                     lmask_new = lec_day_18[k_new] | new_l_mask
                     lec_day_18[k_old] = lmask_old
                     lec_day_18[k_new] = lmask_new
-                    lec_cost_cache[k_old] = self.engine.lecturer_day_cost(lmask_old)
-                    lec_cost_cache[k_new] = self.engine.lecturer_day_cost(lmask_new)
+                    lec_cost_cache[k_old] = self.engine.lecturer_day_cost(
+                        lmask_old, old_d_idx, l
+                    )
+                    lec_cost_cache[k_new] = self.engine.lecturer_day_cost(
+                        lmask_new, new_d_idx, l
+                    )
 
             self.state[sid] = (new_d_idx, new_start_p, new_vid, new_g_mask, new_l_mask)
             self.session_cost_cache[sid] = new_sc
@@ -1053,7 +1410,9 @@ class SimulatedAnnealingOptimizer:
 
         new_coh_costs: Dict[Tuple[str, int], float] = {}
         for (c, d_idx), new_cmask in affected_coh_days.items():
-            nc = self.engine.cohort_day_cost(new_cmask, coh_is_eve.get(c, False))
+            nc = self.engine.cohort_day_cost(
+                new_cmask, coh_is_eve.get(c, False), d_idx, c
+            )
             new_coh_costs[(c, d_idx)] = nc
             delta_e += nc - coh_cost_cache[(c, d_idx)]
 
@@ -1077,7 +1436,7 @@ class SimulatedAnnealingOptimizer:
 
         new_lec_costs: Dict[Tuple[str, int], float] = {}
         for (l, d_idx), new_lmask in affected_lec_days.items():
-            nlc = self.engine.lecturer_day_cost(new_lmask)
+            nlc = self.engine.lecturer_day_cost(new_lmask, d_idx, l)
             new_lec_costs[(l, d_idx)] = nlc
             delta_e += nlc - lec_cost_cache[(l, d_idx)]
 
@@ -1229,18 +1588,75 @@ class SimulatedAnnealingOptimizer:
 
             if rng.random() < p_swap and stream_swap_groups:
                 pairwise_swap_proposals += 1
-                # 65% intra-cohort same-duration swap (compacts cohort schedules & moves theory off Saturday),
-                # 35% global same-(stream, duration) swap (frees room/lecturer bottlenecks)
-                if coh_swap_groups and rng.random() < 0.65:
-                    grp = coh_swap_groups[rng.randrange(len(coh_swap_groups))]
-                    sid_a, sid_b = rng.sample(grp, 2)
-                else:
-                    if rng.random() < p_guided and penalized_sids:
-                        sid_a = penalized_sids[rng.randrange(len(penalized_sids))]
-                        grp = self.sids_by_stream_dur[
-                            (self.var_is_evening[sid_a], self.var_duration[sid_a])
-                        ]
+                # Guided Swap Bias for Saturday Sessions:
+                # When sid_a is scheduled on SATURDAY and is NOT a Shared Practical,
+                # bias the swap partner search (sid_b) toward weekday Shared Practical sessions
+                # (same durationPeriods and isEveningStream, preferably sharing a cohort with sid_a).
+                if rng.random() < p_guided and penalized_sids:
+                    sid_a = penalized_sids[rng.randrange(len(penalized_sids))]
+                    da_curr = self.state[sid_a][0]
+                    dur_a = self.var_duration[sid_a]
+                    eve_a = self.var_is_evening[sid_a]
+                    cohs_a = self.var_cohorts[sid_a]
+
+                    if (
+                        da_curr == self.saturday_idx
+                        and not self.engine.session_is_shared_practical[sid_a]
+                    ):
+                        # 1st priority: weekday Shared Practical sharing a cohort with sid_a
+                        coh_shared_cands: List[str] = []
+                        for c in cohs_a:
+                            for cand in self.shared_prac_by_cohort_dur.get((c, dur_a), ()):
+                                if (
+                                    cand != sid_a
+                                    and self.var_is_evening[cand] == eve_a
+                                    and self.state[cand][0] != self.saturday_idx
+                                ):
+                                    coh_shared_cands.append(cand)
+                        if coh_shared_cands and rng.random() < 0.85:
+                            sid_b = coh_shared_cands[rng.randrange(len(coh_shared_cands))]
+                        else:
+                            # 2nd priority: any weekday Practical sharing a cohort, or global weekday Shared Practical
+                            coh_prac_cands: List[str] = []
+                            for c in cohs_a:
+                                for cand in self.any_prac_by_cohort_dur.get((c, dur_a), ()):
+                                    if (
+                                        cand != sid_a
+                                        and self.var_is_evening[cand] == eve_a
+                                        and self.state[cand][0] != self.saturday_idx
+                                    ):
+                                        coh_prac_cands.append(cand)
+                            if coh_prac_cands and rng.random() < 0.75:
+                                sid_b = coh_prac_cands[rng.randrange(len(coh_prac_cands))]
+                            else:
+                                stream_shared = [
+                                    cand
+                                    for cand in self.shared_prac_by_stream_dur.get(
+                                        (eve_a, dur_a), ()
+                                    )
+                                    if cand != sid_a
+                                    and self.state[cand][0] != self.saturday_idx
+                                ]
+                                if stream_shared and rng.random() < 0.70:
+                                    sid_b = stream_shared[rng.randrange(len(stream_shared))]
+                                else:
+                                    grp = self.sids_by_stream_dur[(eve_a, dur_a)]
+                                    sid_b = grp[rng.randrange(len(grp))]
+                    elif cohs_a and rng.random() < 0.65:
+                        c = cohs_a[rng.randrange(len(cohs_a))]
+                        grp = self.sids_by_cohort_dur[(c, dur_a)]
+                        if len(grp) >= 2:
+                            sid_b = grp[rng.randrange(len(grp))]
+                        else:
+                            grp = self.sids_by_stream_dur[(eve_a, dur_a)]
+                            sid_b = grp[rng.randrange(len(grp))]
+                    else:
+                        grp = self.sids_by_stream_dur[(eve_a, dur_a)]
                         sid_b = grp[rng.randrange(len(grp))]
+                else:
+                    if coh_swap_groups and rng.random() < 0.65:
+                        grp = coh_swap_groups[rng.randrange(len(coh_swap_groups))]
+                        sid_a, sid_b = rng.sample(grp, 2)
                     else:
                         grp = stream_swap_groups[rng.randrange(len(stream_swap_groups))]
                         sid_a, sid_b = rng.sample(grp, 2)

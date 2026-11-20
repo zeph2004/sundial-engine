@@ -600,6 +600,10 @@ def classify_saturday_placements(
     csp_sat_cond1: List[str] = []
     csp_sat_cond2: List[str] = []
     csp_sat_cohorts: Set[str] = set()
+    csp_sat_shared_practicals: List[str] = []
+    csp_sat_solo_practicals: List[str] = []
+    csp_sat_theory: List[str] = []
+    theory_types = {"Theory", "Lecture", "Tutorial"}
 
     gt_sat_sessions: List[str] = []
     gt_sat_cohorts: Set[str] = set()
@@ -607,6 +611,7 @@ def classify_saturday_placements(
     for s in sessions:
         sid = s["sessionId"]
         cohs = s.get("targetCohorts", [])
+        stype = s.get("sessionType", "Theory")
         if s["groundTruth"]["scheduledDay"] == "SATURDAY":
             gt_sat_sessions.append(sid)
             gt_sat_cohorts.update(cohs)
@@ -620,6 +625,12 @@ def classify_saturday_placements(
             session_saturday_reason[sid] = "Weekday"
         else:
             csp_sat_cohorts.update(cohs)
+            if stype in theory_types:
+                csp_sat_theory.append(sid)
+            elif len(cohs) >= 2:
+                csp_sat_shared_practicals.append(sid)
+            else:
+                csp_sat_solo_practicals.append(sid)
             if any(c in cond1_cohorts for c in cohs):
                 reason = "Saturday (Condition 1: Cohort >60p Overflow)"
                 csp_sat_cond1.append(sid)
@@ -641,11 +652,220 @@ def classify_saturday_placements(
         "csp_saturday_cond2_count": len(csp_sat_cond2),
         "csp_saturday_cond1_sessions": csp_sat_cond1,
         "csp_saturday_cond2_sessions": csp_sat_cond2,
+        "csp_saturday_shared_practicals_count": len(csp_sat_shared_practicals),
+        "csp_saturday_solo_practicals_count": len(csp_sat_solo_practicals),
+        "csp_saturday_theory_count": len(csp_sat_theory),
+        "csp_saturday_shared_practicals": csp_sat_shared_practicals,
+        "csp_saturday_solo_practicals": csp_sat_solo_practicals,
+        "csp_saturday_theory_sessions": csp_sat_theory,
         "gt_saturday_total": len(gt_sat_sessions),
         "total_cohorts": total_cohorts,
         "csp_saturday_free_cohorts": csp_sat_free_cohorts,
         "gt_saturday_free_cohorts": gt_sat_free_cohorts,
     }
+
+
+def diagnose_remaining_saturday_theory(
+    sessions: List[Dict[str, Any]],
+    assignments: Dict[str, Tuple[str, int, int | str]],
+    compatible_venues: Dict[str, List[int | str]],
+    schema: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Inspects every remaining Saturday Theory session after SA optimization and diagnoses:
+      - session_id, module_code, cohorts, lecturers, durationPeriods, isEveningStream
+      - How many weekday non-Theory (Lab/Workshop/Studio/Field) sessions those cohorts have,
+        and their durationPeriods
+      - The primary reason a pairwise swap with those weekday non-Theory sessions was blocked
+        (e.g., `duration mismatch`, `lecturer busy on Saturday`, `shared cohort busy on weekday`,
+        `Saturday lecturer busy on weekday`, `weekday cohort busy on Saturday`, `venue unavailable`,
+        or `no weekday practicals available`).
+    """
+    grid = schema["calendar_grid"]
+    active_days: List[str] = list(grid["active_days"])
+    periods_per_day: int = int(grid.get("periods_per_day", 18))
+    day_to_idx: Dict[str, int] = {d: i for i, d in enumerate(active_days)}
+    theory_types = set(
+        schema.get("soft_constraints", {})
+        .get("minimize_saturday_theory", {})
+        .get("params", {})
+        .get("theory_types", ["Theory", "Lecture", "Tutorial"])
+    )
+
+    session_by_id = {s["sessionId"]: s for s in sessions}
+    lec_busy: Dict[str, int] = defaultdict(int)
+    coh_busy: Dict[str, int] = defaultdict(int)
+    ven_busy: Dict[int | str, int] = defaultdict(int)
+    session_gmask: Dict[str, int] = {}
+
+    for s in sessions:
+        sid = s["sessionId"]
+        if sid not in assignments:
+            continue
+        day_str, start_p, vid = assignments[sid]
+        dur = int(s["durationPeriods"])
+        gm = compute_time_mask(day_str, start_p, dur, day_to_idx, periods_per_day)
+        session_gmask[sid] = gm
+        ven_busy[vid] |= gm
+        for l in s.get("lecturers", []):
+            lec_busy[l] |= gm
+        for c in s.get("targetCohorts", []):
+            coh_busy[c] |= gm
+
+    sat_theory_sessions = [
+        s
+        for s in sessions
+        if s["sessionId"] in assignments
+        and assignments[s["sessionId"]][0] == "SATURDAY"
+        and s.get("sessionType", "Theory") in theory_types
+    ]
+
+    diagnostics: List[Dict[str, Any]] = []
+    for sa in sat_theory_sessions:
+        sida = sa["sessionId"]
+        da_str, spa, vida = assignments[sida]
+        dura = int(sa["durationPeriods"])
+        evea = bool(sa.get("isEveningStream", False))
+        cohs_a = list(sa.get("targetCohorts", []))
+        lecs_a = list(sa.get("lecturers", []))
+        cohort_raw_a = str(sa.get("cohortRaw", ""))
+        gma = session_gmask[sida]
+        has_cs7_2 = any(
+            c.lower() in ("cs7-2", "l7-1cs") for c in cohs_a
+        ) or ("cs7-2" in cohort_raw_a.lower())
+
+        # Find all weekday non-Theory sessions belonging to any cohort in cohs_a
+        coh_set_a = set(cohs_a)
+        wk_practicals: List[Dict[str, Any]] = []
+        for sb in sessions:
+            sidb = sb["sessionId"]
+            if sidb == sida or sidb not in assignments:
+                continue
+            db_str, _, _ = assignments[sidb]
+            if db_str == "SATURDAY":
+                continue
+            if sb.get("sessionType", "Theory") in theory_types:
+                continue
+            if coh_set_a.intersection(sb.get("targetCohorts", [])):
+                wk_practicals.append(sb)
+
+        dur_counts: Counter = Counter(int(sb["durationPeriods"]) for sb in wk_practicals)
+        reason_counts: Counter = Counter()
+        candidate_details: List[str] = []
+
+        if not wk_practicals:
+            primary_reason = "no weekday practicals available"
+        else:
+            for sb in wk_practicals:
+                sidb = sb["sessionId"]
+                db_str, spb, vidb = assignments[sidb]
+                durb = int(sb["durationPeriods"])
+                eveb = bool(sb.get("isEveningStream", False))
+                cohs_b = list(sb.get("targetCohorts", []))
+                lecs_b = list(sb.get("lecturers", []))
+                gmb = session_gmask[sidb]
+
+                if durb != dura:
+                    reason = f"duration mismatch ({durb}p vs {dura}p)"
+                    reason_counts["duration mismatch"] += 1
+                    candidate_details.append(f"{sidb}({sb['moduleCode']},{durb}p): {reason}")
+                    continue
+                if eveb != evea:
+                    reason = "stream mismatch (Evening vs Full-Time)"
+                    reason_counts["stream mismatch"] += 1
+                    candidate_details.append(f"{sidb}({sb['moduleCode']},{durb}p): {reason}")
+                    continue
+
+                # Check hard constraints if sida and sidb swap time slots
+                # Release both sida and sidb from bitmasks
+                busy_lec_b_on_sat = [
+                    l for l in lecs_b if ((lec_busy[l] & ~gma & ~gmb) & gma) != 0
+                ]
+                busy_coh_b_on_sat = [
+                    c for c in cohs_b if ((coh_busy[c] & ~gma & ~gmb) & gma) != 0
+                ]
+                busy_lec_a_on_wk = [
+                    l for l in lecs_a if ((lec_busy[l] & ~gma & ~gmb) & gmb) != 0
+                ]
+                busy_coh_a_on_wk = [
+                    c for c in cohs_a if ((coh_busy[c] & ~gma & ~gmb) & gmb) != 0
+                ]
+
+                if busy_lec_b_on_sat:
+                    reason = f"lecturer busy on Saturday ({', '.join(busy_lec_b_on_sat)})"
+                    reason_counts["lecturer busy on Saturday"] += 1
+                elif busy_coh_a_on_wk:
+                    reason = f"shared cohort busy on weekday ({', '.join(busy_coh_a_on_wk)} on {db_str} P{spb})"
+                    reason_counts["shared cohort busy on weekday"] += 1
+                elif busy_lec_a_on_wk:
+                    reason = f"Saturday lecturer busy on weekday ({', '.join(busy_lec_a_on_wk)} on {db_str} P{spb})"
+                    reason_counts["Saturday lecturer busy on weekday"] += 1
+                elif busy_coh_b_on_sat:
+                    reason = f"weekday practical cohort busy on Saturday ({', '.join(busy_coh_b_on_sat)})"
+                    reason_counts["weekday cohort busy on Saturday"] += 1
+                else:
+                    # Check venue availability at swapped slots
+                    free_va = [
+                        v
+                        for v in compatible_venues.get(sida, [])
+                        if ((ven_busy[v] & ~gma & ~gmb) & gmb) == 0
+                    ]
+                    free_vb = [
+                        v
+                        for v in compatible_venues.get(sidb, [])
+                        if ((ven_busy[v] & ~gma & ~gmb) & gma) == 0
+                    ]
+                    if not free_va or not free_vb:
+                        reason = "compatible venue unavailable at swapped slot"
+                        reason_counts["compatible venue unavailable"] += 1
+                    else:
+                        reason = "feasible swap exists (blocked by positive Delta-E objective trade-off)"
+                        reason_counts["objective trade-off (positive Delta-E)"] += 1
+                candidate_details.append(
+                    f"{sidb}({sb['moduleCode']},{sb.get('sessionType')},{durb}p,{db_str} P{spb}): {reason}"
+                )
+
+            # Determine primary reason: prioritize same-duration candidate blockers if any same-duration practical exists,
+            # otherwise report duration mismatch.
+            non_dur_reasons = {
+                k: v for k, v in reason_counts.items() if k != "duration mismatch"
+            }
+            if non_dur_reasons:
+                top_NonDur = max(non_dur_reasons.items(), key=lambda kv: kv[1])[0]
+                if reason_counts["duration mismatch"] > 0:
+                    primary_reason = (
+                        f"{top_NonDur} (for same-{dura}p practicals); "
+                        f"duration mismatch for {reason_counts['duration mismatch']}/{len(wk_practicals)} practicals"
+                    )
+                else:
+                    primary_reason = top_NonDur
+            else:
+                primary_reason = (
+                    f"duration mismatch (all {len(wk_practicals)} weekday practicals have duration "
+                    f"{dict(dur_counts)} != {dura}p)"
+                )
+
+        diagnostics.append(
+            {
+                "session_id": sida,
+                "module_code": sa["moduleCode"],
+                "session_type": sa.get("sessionType", "Theory"),
+                "cohorts": cohs_a,
+                "cohort_raw": cohort_raw_a,
+                "lecturers": lecs_a,
+                "durationPeriods": dura,
+                "isEveningStream": evea,
+                "saturday_slot": f"{da_str} P{spa}..P{spa + dura - 1} (Venue {vida})",
+                "has_cs7_2": has_cs7_2,
+                "weekday_non_theory_count": len(wk_practicals),
+                "weekday_non_theory_durations": dict(sorted(dur_counts.items())),
+                "primary_swap_blocker": primary_reason,
+                "reason_breakdown": dict(reason_counts),
+                "candidate_details": candidate_details,
+            }
+        )
+
+    return diagnostics
 
 
 def verify_solution(
@@ -932,16 +1152,49 @@ def run_benchmark(
         w_init = init_bd.weighted_by_rule.get(rname, 0.0)
         w_final = final_bd.weighted_by_rule.get(rname, 0.0)
         print(
-            f"    * {rname:28s} (w={w:5.1f}) : count {c_init:4d} -> {c_final:4d} | "
+            f"    * {rname:38s} (w={w:5.1f}) : count {c_init:4d} -> {c_final:4d} | "
             f"penalty {w_init:9.2f} -> {w_final:9.2f}"
         )
     print(
         f"  Post-SA Saturday Audit     : {opt_sat['csp_saturday_total']} Sat sessions "
-        f"(Theory on Sat: {init_bd.counts_by_rule.get('minimize_saturday_theory', 0)} -> "
-        f"{final_bd.counts_by_rule.get('minimize_saturday_theory', 0)}, "
-        f"Cond-2: {opt_sat['csp_saturday_cond2_count']}) | "
+        f"[Shared Practicals: {sat['csp_saturday_shared_practicals_count']} -> {opt_sat['csp_saturday_shared_practicals_count']}, "
+        f"Solo Practicals: {sat['csp_saturday_solo_practicals_count']} -> {opt_sat['csp_saturday_solo_practicals_count']}, "
+        f"Theory: {sat['csp_saturday_theory_count']} -> {opt_sat['csp_saturday_theory_count']} "
+        f"(Cond-2: {opt_sat['csp_saturday_cond2_count']})] | "
         f"Tier-1 Affinity: {opt_verification['tier_1_total']}/{tot} ({opt_verification['tier_1_total'] / tot * 100:.1f}%)"
     )
+
+    if "Mode A" in label:
+        sat_theory_diag = diagnose_remaining_saturday_theory(
+            sessions=sessions,
+            assignments=opt_assignments,
+            compatible_venues=solver.compatible_venues,
+            schema=schema,
+        )
+        opt_verification["saturday_theory_diagnostics"] = sat_theory_diag
+        print(
+            f"\n  --- Mode A Post-SA Remaining Saturday Theory Diagnostic ({len(sat_theory_diag)} sessions) ---"
+        )
+        if not sat_theory_diag:
+            print("    * 0 Saturday Theory sessions remaining!")
+        else:
+            for d in sat_theory_diag:
+                tag = " [HIGHLIGHT: cs7-2 / L7-1CS]" if d["has_cs7_2"] else ""
+                print(
+                    f"    * {d['session_id']}{tag} | module={d['module_code']} ({d['session_type']}) | "
+                    f"cohorts={d['cohorts']} (raw='{d.get('cohort_raw', '')}') | lecturers={d['lecturers']} | "
+                    f"durationPeriods={d['durationPeriods']} | isEveningStream={d['isEveningStream']} | "
+                    f"slot={d['saturday_slot']}"
+                )
+                print(
+                    f"      - Weekday non-Theory sessions for cohort(s): {d['weekday_non_theory_count']} "
+                    f"(durationPeriods breakdown: {d['weekday_non_theory_durations']})"
+                )
+                print(f"      - Primary pairwise swap blocker: {d['primary_swap_blocker']}")
+                if d["candidate_details"]:
+                    print(
+                        f"      - Candidate practicals: {'; '.join(d['candidate_details'])}"
+                    )
 
     opt_verification["optimizer_report"] = opt_stats.to_dict()
     return opt_assignments, stats, opt_verification, solver
