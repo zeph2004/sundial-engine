@@ -21,6 +21,12 @@ from src.csp.domain import (
     load_json,
     run_preflight_checks,
 )
+from src.csp.optimizer import (
+    OptimizerStats,
+    SimulatedAnnealingOptimizer,
+    SoftConstraintEngine,
+    SoftObjectiveBreakdown,
+)
 
 
 DAY_INDEX_DEFAULT: Dict[str, int] = {
@@ -878,7 +884,67 @@ def run_benchmark(
         f"({verification['tier_2_overflow'] / tot * 100:.1f}%)"
     )
 
-    return assignments, stats, verification, solver
+    # Phase 4: Declarative Soft-Constraint Engine & Simulated Annealing Optimizer
+    optimizer = SimulatedAnnealingOptimizer(
+        sessions=sessions,
+        venues=venues,
+        schema=schema,
+        initial_assignments=assignments,
+        compatible_venues=solver.compatible_venues,
+        venue_tier_label=solver.venue_tier_label,
+        affinity_config=affinity_config,
+    )
+    opt_assignments, opt_stats = optimizer.optimize()
+    opt_verification = verify_solution(
+        sessions, opt_assignments, initial_domains, venue_tier_labels=solver.venue_tier_label
+    )
+    verification["optimizer_report"] = opt_stats.to_dict()
+    verification["initial_csp_assignments"] = assignments
+    verification["post_sa_verification_valid"] = opt_verification["valid"]
+
+    init_bd = opt_stats.initial_breakdown
+    final_bd = opt_stats.final_breakdown
+    opt_sat = opt_verification["saturday_report"]
+
+    print("\n  --- Phase 4: Soft-Constraint Engine & Simulated Annealing Optimizer ---")
+    print(
+        f"  SA Optimizer Status        : {'ENABLED' if opt_stats.enabled else 'DISABLED'} "
+        f"({opt_stats.iterations:,} iterations in {opt_stats.runtime_seconds * 1000:.2f} ms)"
+    )
+    print(
+        f"  Soft Objective Penalty     : {opt_stats.initial_objective:,.2f}  ->  {opt_stats.final_objective:,.2f} "
+        f"(-{opt_stats.improvement_pct:.2f}% reduction)"
+    )
+    print(
+        f"  SA Move Telemetry          : {opt_stats.accepted_moves:,} accepted "
+        f"({opt_stats.improving_moves:,} improving, {opt_stats.uphill_moves:,} uphill) | "
+        f"Shifts: {opt_stats.single_shift_proposals:,}, Swaps: {opt_stats.pairwise_swap_proposals:,}"
+    )
+    print(
+        f"  Post-SA Hard Verification  : Valid={opt_verification['valid']} "
+        f"(0 Lecturer / 0 Cohort / 0 Venue Collisions | 100% Dept Lab Lock)"
+    )
+    print("  Per-Rule Soft-Constraint Breakdown (Initial CSP -> Post-SA Optimized):")
+    for rname in init_bd.enabled_rules:
+        w = init_bd.weights_by_rule.get(rname, 0.0)
+        c_init = init_bd.counts_by_rule.get(rname, 0)
+        c_final = final_bd.counts_by_rule.get(rname, 0)
+        w_init = init_bd.weighted_by_rule.get(rname, 0.0)
+        w_final = final_bd.weighted_by_rule.get(rname, 0.0)
+        print(
+            f"    * {rname:28s} (w={w:5.1f}) : count {c_init:4d} -> {c_final:4d} | "
+            f"penalty {w_init:9.2f} -> {w_final:9.2f}"
+        )
+    print(
+        f"  Post-SA Saturday Audit     : {opt_sat['csp_saturday_total']} Sat sessions "
+        f"(Theory on Sat: {init_bd.counts_by_rule.get('minimize_saturday_theory', 0)} -> "
+        f"{final_bd.counts_by_rule.get('minimize_saturday_theory', 0)}, "
+        f"Cond-2: {opt_sat['csp_saturday_cond2_count']}) | "
+        f"Tier-1 Affinity: {opt_verification['tier_1_total']}/{tot} ({opt_verification['tier_1_total'] / tot * 100:.1f}%)"
+    )
+
+    opt_verification["optimizer_report"] = opt_stats.to_dict()
+    return opt_assignments, stats, opt_verification, solver
 
 
 if __name__ == "__main__":

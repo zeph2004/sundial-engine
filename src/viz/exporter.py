@@ -124,6 +124,7 @@ def _build_mode_bundle(
     t1_total = verification.get("tier_1_total", stats.total_variables)
     t1a_count = verification.get("tier_1a_count", stats.total_variables)
     t2_overflow = verification.get("tier_2_overflow", 0)
+    opt_report = verification.get("optimizer_report", {})
 
     return {
         "modeKey": mode_key,
@@ -155,6 +156,7 @@ def _build_mode_bundle(
             "gtSaturdayFreeCohorts": sat_report.get("gt_saturday_free_cohorts", 0),
             "groundTruthConflictPairs": gt_audit["total_conflicting_session_pairs"],
             "groundTruthConflictingSessions": gt_audit["conflicting_sessions_count"],
+            "optimizer": opt_report,
         },
         "sessions": exported_sessions,
     }
@@ -255,6 +257,8 @@ def export_timetable_view_data(
             "streamBoundaryAfterPeriod": schema["streams"]["full_time"]["max_period"],
             "twilightBufferPeriods": [11, 12],
             "periods": teaching_periods,
+            "softConstraintsConfig": schema.get("soft_constraints", {}),
+            "optimizerConfig": schema.get("optimizer", {}),
         },
         "entities": {
             "cohorts": cohorts_list,

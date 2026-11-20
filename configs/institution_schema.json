@@ -96,5 +96,62 @@
     },
     "allow_fallback_venues_in_initial_domain": true,
     "fallback_venue_soft_penalty_weight": 25
+  },
+  "soft_constraints": {
+    "minimize_saturday_theory": {
+      "enabled": true,
+      "weight": 150.0,
+      "params": {
+        "theory_types": ["Theory", "Lecture", "Tutorial"]
+      }
+    },
+    "minimize_saturday_overflow": {
+      "enabled": true,
+      "weight": 100.0,
+      "params": {}
+    },
+    "minimize_evening_twilight": {
+      "enabled": true,
+      "weight": 60.0,
+      "params": {
+        "twilight_periods": [11, 12]
+      }
+    },
+    "minimize_cohort_idle_gaps": {
+      "enabled": true,
+      "weight": 25.0,
+      "params": {}
+    },
+    "balance_daily_workload": {
+      "enabled": true,
+      "weight": 20.0,
+      "params": {
+        "cohort_ft_max_periods": 8,
+        "cohort_eve_max_periods": 4,
+        "lecturer_max_periods": 6
+      }
+    },
+    "prefer_exact_module_venue": {
+      "enabled": true,
+      "weight": 10.0,
+      "params": {
+        "tier_penalties": {
+          "1A": 0.0,
+          "1B": 1.0,
+          "1C": 2.0,
+          "2": 5.0
+        }
+      }
+    }
+  },
+  "optimizer": {
+    "enabled": true,
+    "max_iterations": 40000,
+    "initial_temperature": 120.0,
+    "cooling_rate": 0.99985,
+    "min_temperature": 0.05,
+    "swap_probability": 0.45,
+    "guided_proposal_probability": 0.70,
+    "random_seed": 42
   }
 }

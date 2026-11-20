@@ -867,7 +867,7 @@
         <div class="brand-mark">SE</div>
         <div>
           <div class="brand-title">Sundial CSP Timetable Visualizer</div>
-          <div class="brand-subtitle" id="headerSubtitle">Arusha Technical College (ATC) — Phase 3b Backtracking Solver</div>
+          <div class="brand-subtitle" id="headerSubtitle">Arusha Technical College (ATC) — Phase 4 CSP + Simulated Annealing Optimizer</div>
         </div>
       </div>
 
@@ -1076,10 +1076,15 @@
           const affPct = t.tier1AffinityPct !== undefined ? `${t.tier1AffinityPct}%` : "100%";
           const satFree = t.cspSaturdayFreeCohorts !== undefined ? `${t.cspSaturdayFreeCohorts}/${t.totalCohorts}` : "";
           const satCount = t.cspSaturdayTotal !== undefined ? t.cspSaturdayTotal : 0;
+          const opt = t.optimizer && t.optimizer.enabled ? t.optimizer : null;
+          const optBadge = opt
+            ? `<span>SA Obj: <strong>-${opt.improvementPct}%</strong> (${opt.runtimeMs} ms)</span>`
+            : "";
           els.globalTelemetryBadge.innerHTML = `
             <span><span class="status-dot"></span><strong>${t.status}</strong> (${t.totalVariables} vars)</span>
-            <span>Runtime: <strong>${t.runtimeMs} ms</strong></span>
-            <span>Sat-Free Cohorts: <strong>${satFree}</strong> (Sat sessions: <strong>${satCount}</strong>)</span>
+            <span>CSP: <strong>${t.runtimeMs} ms</strong></span>
+            ${optBadge}
+            <span>Sat-Free Cohorts: <strong>${satFree}</strong> (Sat: <strong>${satCount}</strong>)</span>
             <span>Tier-1 Affinity: <strong>${affPct}</strong></span>
             <span>Twilight: <strong>${t.twilightCount}</strong></span>
           `;
@@ -1514,11 +1519,17 @@
                 <div class="metric-sub">Exact Module: ${telem.exactModPct}% • Tier-2 Overflow: ${telem.tier2OverflowSessions}</div>
               </div>
               <div class="metric-card">
-                <div class="metric-label">Hard Constraint Audit</div>
+                <div class="metric-label">Hard &amp; Soft Optimization Audit</div>
                 <div class="metric-value ${telem.conflictSlots > 0 ? "danger" : ""}">
                   ${telem.conflictSlots === 0 ? "0 Conflicts (Valid)" : `${telem.conflictSlots} Slot Collisions`}
                 </div>
-                <div class="metric-sub">${state.scheduleMode === "csp" ? "100% Dept Lab Lock Verified" : "Raw ATC Ground Truth"}</div>
+                <div class="metric-sub">${
+                  state.scheduleMode === "csp"
+                    ? (bundle.telemetry.optimizer && bundle.telemetry.optimizer.enabled
+                        ? `SA Penalty: -${bundle.telemetry.optimizer.improvementPct}% (${bundle.telemetry.optimizer.initialObjective} → ${bundle.telemetry.optimizer.finalObjective})`
+                        : "100% Dept Lab Lock Verified")
+                    : "Raw ATC Ground Truth"
+                }</div>
               </div>
             </div>
 
