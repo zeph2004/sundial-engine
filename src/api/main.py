@@ -41,11 +41,14 @@ class BrandingUpdateRequest(BaseModel):
     logo_url: Optional[str] = None
 
 
-class PinSessionRequest(BaseModel):
-    session_id: str
+class PinSlotRequest(BaseModel):
     day: int | str = Field(..., description="Day index (0..5) or day name ('MONDAY'..'SATURDAY')")
     start_period: int = Field(..., ge=1, le=18)
     venue_id: int | str
+
+
+class PinSessionRequest(PinSlotRequest):
+    session_id: str
 
 
 def create_app(state_manager: Optional[AppStateManager] = None) -> FastAPI:
@@ -118,6 +121,26 @@ def create_app(state_manager: Optional[AppStateManager] = None) -> FastAPI:
             "pinned_count": len(manager.state.get("pinned_assignments", {})),
             "pinned_assignments": manager.state.get("pinned_assignments", {}),
         }
+
+    @app.put("/api/pins/{session_id}", tags=["Session Pinning"])
+    def upsert_pin_session(
+        session_id: str,
+        req: PinSlotRequest,
+        _admin: Dict[str, Any] = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        try:
+            pin_entry = manager.set_pin(
+                session_id=session_id,
+                day=req.day,
+                start_period=req.start_period,
+                venue_id=req.venue_id,
+            )
+            return {"status": "pinned", "pin": pin_entry}
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
 
     @app.post("/api/pins", tags=["Session Pinning"])
     def pin_session(

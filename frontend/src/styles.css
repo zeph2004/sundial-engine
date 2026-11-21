@@ -1,0 +1,1224 @@
+/* ==========================================================================
+   Sundial Design Tokens (from sundial-brand-guideline.md)
+   Clean, institutional, thin-bordered, shadow-free aesthetic.
+   ========================================================================== */
+:root {
+  /* Brand Palette */
+  --shadow: #11151c;
+  --stone: #f4f1ea;
+  --surface: #ffffff;
+  --indigo: #1f2a6b;
+  --indigo-hover: #161f52;
+  --noon: #f2a71b;
+  --slate: #5a6272;
+  --dust: #d9d4c7;
+  --dust-strong: #bdb6a6;
+  --dusk: #e3e6f5;
+  --daybreak: #fbe8b8;
+
+  /* Status Colours (Fixed) */
+  --clear: #26704f;
+  --clear-bg: #e9f4ee;
+  --clash: #c0392b;
+  --clash-bg: #fdecea;
+  --caution: #8a5a00;
+  --caution-bg: #fef4dc;
+
+  /* Typography */
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* Shape */
+  --radius: 6px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--stone);
+  color: var(--shadow);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--indigo);
+  text-decoration: none;
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease,
+    color 150ms ease;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--indigo);
+  color: #ffffff;
+  border-color: var(--indigo);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--indigo-hover);
+  border-color: var(--indigo-hover);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--shadow);
+  border-color: var(--dust-strong);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--indigo);
+  color: var(--indigo);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--slate);
+  border-color: var(--dust);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--indigo);
+  border-color: var(--indigo);
+  background: var(--surface);
+}
+
+.btn-full {
+  width: 100%;
+}
+
+/* ==========================================================================
+   Public Front Door Layout
+   ========================================================================== */
+.page-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.pub-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--dust);
+}
+
+.pub-header-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pub-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pub-logo-img {
+  height: 36px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+}
+
+.pub-inst-name {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--shadow);
+}
+
+.pub-sem-title {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--slate);
+}
+
+.pub-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Lookup Bar */
+.lookup-bar {
+  background: var(--surface);
+  border: 1px solid var(--dust);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.lens-tabs {
+  display: inline-flex;
+  background: var(--stone);
+  border: 1px solid var(--dust);
+  border-radius: var(--radius);
+  padding: 3px;
+  gap: 2px;
+}
+
+.lens-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--slate);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.lens-tab:hover {
+  color: var(--shadow);
+}
+
+.lens-tab.is-active {
+  background: var(--surface);
+  color: var(--indigo);
+  border: 1px solid var(--dust);
+}
+
+.lookup-select-wrap {
+  flex: 1;
+  min-width: 240px;
+}
+
+/* Searchable Select */
+.sd-select {
+  position: relative;
+  width: 100%;
+}
+
+.sd-select-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 10px;
+  background: var(--surface);
+  border: 1px solid var(--dust-strong);
+  border-radius: var(--radius);
+  cursor: text;
+}
+
+.sd-select-control.is-open {
+  border-color: var(--indigo);
+}
+
+.sd-select-icon,
+.sd-select-chevron {
+  color: var(--slate);
+  flex-shrink: 0;
+}
+
+.sd-select-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--shadow);
+  min-width: 0;
+}
+
+.sd-select-clear {
+  border: none;
+  background: transparent;
+  color: var(--slate);
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+}
+
+.sd-select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--dust-strong);
+  border-radius: var(--radius);
+}
+
+.sd-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.sd-select-option.is-highlighted {
+  background: var(--stone);
+}
+
+.sd-select-option.is-selected {
+  background: var(--dusk);
+  color: var(--indigo);
+  font-weight: 500;
+}
+
+.sd-select-option-id {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--slate);
+  flex-shrink: 0;
+}
+
+.sd-select-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--slate);
+  font-size: 13px;
+}
+
+/* Entity Summary Strip */
+.entity-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.entity-strip-title h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--shadow);
+}
+
+.entity-strip-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.metric-pill {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 9px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--dust);
+  color: var(--shadow);
+}
+
+.metric-clear {
+  background: var(--clear-bg);
+  border-color: var(--clear);
+  color: var(--clear);
+  font-weight: 600;
+}
+
+.metric-caution {
+  background: var(--caution-bg);
+  border-color: var(--noon);
+  color: var(--caution);
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   Reusable TimetableGrid Component
+   ========================================================================== */
+.tt-grid-wrapper {
+  background: var(--surface);
+  border: 1px solid var(--dust);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.tt-grid-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  color: var(--slate);
+}
+
+.tt-grid-stream-tag {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--shadow);
+}
+
+.tt-grid-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.tt-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tt-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--dust-strong);
+  display: inline-block;
+}
+
+.tt-swatch-ft {
+  background: var(--daybreak);
+}
+
+.tt-swatch-eve {
+  background: var(--dusk);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 3px,
+    rgba(31, 42, 107, 0.14) 3px,
+    rgba(31, 42, 107, 0.14) 4px
+  );
+}
+
+.tt-break-swatch {
+  width: 10px;
+  height: 12px;
+  border-right: 2px dashed var(--slate);
+  display: inline-block;
+}
+
+.tt-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.tt-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 1px solid var(--shadow);
+  min-width: 780px;
+}
+
+.tt-table th,
+.tt-table td {
+  border: 1px solid var(--dust);
+  vertical-align: top;
+}
+
+.tt-corner-th {
+  width: 68px;
+  background: var(--stone);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  padding: 8px;
+  vertical-align: middle !important;
+  border-bottom: 1.5px solid var(--shadow) !important;
+  border-right: 1.5px solid var(--shadow) !important;
+}
+
+.tt-period-th {
+  background: var(--stone);
+  padding: 6px 3px;
+  text-align: center;
+  border-bottom: 1.5px solid var(--shadow) !important;
+  position: relative;
+}
+
+.tt-twilight-th {
+  background: #f8f2e4;
+}
+
+.tt-p-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--shadow);
+}
+
+.tt-p-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--slate);
+  line-height: 1.25;
+  margin-top: 2px;
+}
+
+.tt-p-time span {
+  display: block;
+}
+
+.tt-break-label {
+  margin-top: 2px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--indigo);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tt-break-after {
+  border-right: 2px dashed var(--slate) !important;
+}
+
+.tt-boundary-after {
+  border-right: 2px solid var(--indigo) !important;
+}
+
+.tt-day-td {
+  background: var(--stone);
+  padding: 8px;
+  vertical-align: middle !important;
+  border-right: 1.5px solid var(--shadow) !important;
+}
+
+.tt-day-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--shadow);
+}
+
+.tt-sat-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--noon);
+  color: var(--shadow);
+}
+
+.tt-day-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--slate);
+  margin-top: 2px;
+}
+
+.tt-slot-td {
+  height: 76px;
+  padding: 3px;
+  background: var(--surface);
+}
+
+.tt-empty-td {
+  background: var(--surface);
+}
+
+.tt-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  height: 100%;
+}
+
+/* Session Card — Locked UX Spec: Module Code + Room/Venue + Type badge only */
+.tt-session-card {
+  flex: 1;
+  border-radius: 4px;
+  padding: 6px 7px;
+  border: 1px solid var(--dust-strong);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  overflow: hidden;
+  transition: border-color 150ms ease;
+}
+
+.tt-stream-ft {
+  background: var(--daybreak);
+  border-left: 3px solid var(--noon);
+}
+
+.tt-stream-eve {
+  background: var(--dusk);
+  border-left: 3px solid var(--indigo);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 6px,
+    rgba(31, 42, 107, 0.06) 6px,
+    rgba(31, 42, 107, 0.06) 7px
+  );
+}
+
+.tt-session-card.tt-is-pinned {
+  border-color: var(--indigo);
+}
+
+.tt-session-card.tt-clickable {
+  cursor: pointer;
+}
+
+.tt-session-card:hover {
+  border-color: var(--shadow);
+}
+
+.tt-card-row-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.tt-mod-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--shadow);
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.tt-card-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.tt-pin-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--indigo);
+}
+
+.tt-type-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  border: 1px solid var(--dust-strong);
+  color: var(--shadow);
+}
+
+.tt-card-venue {
+  font-size: 12px;
+  color: var(--shadow);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Hover Popover Tooltip */
+.tt-popover {
+  position: fixed;
+  z-index: 60;
+  width: 296px;
+  background: var(--shadow);
+  color: var(--stone);
+  border: 1px solid var(--shadow);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  pointer-events: none;
+}
+
+.tt-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tt-pop-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--noon);
+}
+
+.tt-pop-type {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(244, 241, 234, 0.3);
+  color: var(--stone);
+}
+
+.tt-pop-name {
+  margin-top: 3px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 1.3;
+}
+
+.tt-pop-dl {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(244, 241, 234, 0.16);
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.tt-pop-dl > div {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  gap: 6px;
+}
+
+.tt-pop-dl dt {
+  color: rgba(244, 241, 234, 0.65);
+  font-weight: 500;
+}
+
+.tt-pop-dl dd {
+  margin: 0;
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   Mobile (<768px) vs Desktop (>=768px)
+   ========================================================================== */
+.mobile-download-card {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--dust);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.mobile-card-kicker {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--slate);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mobile-card-title {
+  margin: 4px 0 12px;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.mobile-card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-size: 13.5px;
+  color: var(--slate);
+}
+
+.mobile-download-card .btn + .btn {
+  margin-top: 8px;
+}
+
+@media (max-width: 767px) {
+  .entity-strip {
+    display: none;
+  }
+
+  .mobile-download-card {
+    display: block;
+  }
+
+  .grid-section.mobile-grid-hidden {
+    display: none;
+  }
+
+  .lookup-bar .btn-primary {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   Footer & Empty / Status Panels
+   ========================================================================== */
+.pub-footer {
+  border-top: 1px solid var(--dust);
+  background: var(--surface);
+  margin-top: auto;
+}
+
+.pub-footer-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--slate);
+}
+
+.footer-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-panel,
+.empty-state-card {
+  max-width: 520px;
+  margin: 64px auto;
+  padding: 28px;
+  background: var(--surface);
+  border: 1px solid var(--dust);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.empty-state-card h2 {
+  margin: 12px 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.empty-state-card p {
+  margin: 0 0 18px;
+  color: var(--slate);
+}
+
+.status-error {
+  border-color: var(--clash);
+  color: var(--clash);
+}
+
+/* ==========================================================================
+   Admin Login (/login)
+   ========================================================================== */
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--stone);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--dust);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.auth-wordmark {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--shadow);
+}
+
+.auth-tagline {
+  font-size: 12.5px;
+  color: var(--slate);
+}
+
+.auth-heading {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.auth-sub {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: var(--slate);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--shadow);
+}
+
+.field-input {
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--dust-strong);
+  border-radius: var(--radius);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--shadow);
+  background: var(--surface);
+  outline: none;
+}
+
+.field-input:focus {
+  border-color: var(--indigo);
+}
+
+.inline-alert {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-size: 13.5px;
+  margin-bottom: 14px;
+  border: 1px solid transparent;
+}
+
+.alert-clash {
+  background: var(--clash-bg);
+  border-color: var(--clash);
+  color: var(--clash);
+}
+
+.auth-footer {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dust);
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--indigo);
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   Registrar Studio Shell (/studio)
+   ========================================================================== */
+.studio-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.studio-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--dust);
+}
+
+.studio-header-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.studio-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-wordmark {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--shadow);
+}
+
+.studio-divider {
+  color: var(--dust-strong);
+}
+
+.studio-inst {
+  font-size: 14px;
+  color: var(--slate);
+}
+
+.studio-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.studio-nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--slate);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.studio-nav-tab:hover {
+  color: var(--shadow);
+  background: var(--stone);
+}
+
+.studio-nav-tab.is-active {
+  background: var(--dusk);
+  border-color: var(--indigo);
+  color: var(--indigo);
+}
+
+.studio-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-user-pill {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--stone);
+  border: 1px solid var(--dust);
+  color: var(--slate);
+}
+
+.studio-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.studio-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.studio-panel-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.studio-panel-head p {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  color: var(--slate);
+}
+
+.text-clear {
+  color: var(--clear);
+}
+
+.studio-preview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.studio-placeholder {
+  max-width: 560px;
+  margin: 48px auto;
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--dust);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--slate);
+}
+
+.studio-placeholder h2 {
+  margin: 12px 0 6px;
+  color: var(--shadow);
+  font-size: 18px;
+}
+
+/* ==========================================================================
+   Dedicated A4 Landscape Print Stylesheet (Section 11 Brand Rules)
+   ========================================================================== */
+.print-sheet-header {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #11151c !important;
+    font-size: 10pt;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .pub-header {
+    display: none !important;
+  }
+
+  .pub-main {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .print-sheet-header {
+    display: flex !important;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1.5px solid #11151c;
+  }
+
+  .print-inst {
+    font-size: 10pt;
+    color: #5a6272;
+  }
+
+  .print-entity {
+    font-size: 14pt;
+    font-weight: 600;
+    color: #11151c;
+  }
+
+  .print-meta {
+    display: flex;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 9pt;
+    color: #11151c;
+  }
+
+  .grid-section.mobile-grid-hidden {
+    display: block !important;
+  }
+
+  .tt-grid-wrapper {
+    border: none !important;
+    padding: 0 !important;
+  }
+
+  .tt-table {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .tt-slot-td {
+    height: 58px !important;
+    padding: 2px !important;
+  }
+
+  .tt-mod-code {
+    font-size: 9pt !important;
+  }
+
+  .tt-card-venue {
+    font-size: 8.5pt !important;
+  }
+
+  .tt-type-badge {
+    font-size: 7.5pt !important;
+  }
+
+  .pub-footer {
+    border-top: 1px solid #d9d4c7;
+    margin-top: 10px;
+  }
+
+  .pub-footer-inner {
+    padding: 6px 0 !important;
+    font-size: 8.5pt !important;
+  }
+}

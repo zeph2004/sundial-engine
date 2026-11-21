@@ -1,7 +1,26 @@
-
-.ven./
+# Python
+.venv/
+venv/
 __pycache__/
-*.pyp
-*.pyc
-.DS_Store
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
 .ipynb_checkpoints/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+node_modules/
+dist/
+*.tsbuildinfo
+
+# OS / Editor
+.DS_Store
+.vscode/
+*.swp
+*.tmp
+
+# Runtime uploads
+data/uploads/*
+!data/uploads/.gitkeep

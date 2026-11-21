@@ -1,6 +1,5 @@
 <div align="center">
 
-
 ```text
                                    \          |          /                                   
                                     \     .─█████─.     /                                    
@@ -12,7 +11,7 @@
                   ════════════╡  S U N D I A L - E N G I N E  ╞════════════                  
                       ─────────███ ░░░░░░░░░░ ║ ░░░░░░░░░░ ███─────────                      
                                  ╲   ░░░░░░░░ ║ ░░░░░░░░   ╱                                 
-                                  `─.  ░░░░░░ ▼ ░░░░░░  .─'                                  
+                                  `─.  ░░░░░░ ▼ ░░░░░░  `─.                                  
                                 .─'  ██  ░░░░░░░░░░░  ██  `─.                                
                               .'     / `─.  ░░░░░  .─' \     `.                              
                                     /     `─█████─'     \                                    
@@ -22,151 +21,181 @@
 
 </div>
 
-An institution-agnostic **University Course Timetabling Constraint Satisfaction & Optimization Engine** built from first principles in pure Python 3 (zero external black-box solver dependencies).
+# Sundial Engine
 
-`sundial-engine` models and solves real-world university scheduling constraints—starting with **Arusha Technical College (ATC)** as its primary empirical benchmark (`1,306` raw weekly sessions across `29` programs, `10` NTA levels, `123` cohorts, `175` lecturers, and `75` physical venues), and architected to generalize declaratively to other Tanzanian higher-learning institutions (`DIT`, `MUST`, `UDSM`, etc.) via JSON configuration schemas.
+**Sundial Engine** is an institution-agnostic **University Course Timetabling CSP & Optimization Engine** written in pure Python 3 (zero external solver dependencies in `src/csp/`), packaged as a self-hosted web application (**FastAPI** backend + **React / Vite** frontend).
 
----
+Every institutional rule—calendar grid, breaks, Full-Time/Evening streams, venue compatibility, departmental affinity pools, soft-constraint weights, and optimizer parameters—lives declaratively in JSON (`configs/institution_schema.json`).
 
-## 1. Benchmark Dataset: Arusha Technical College (ATC)
+### 2-Stage Solving Pipeline
 
-Extracted and normalized from ATC's master timetable (`data/raw/atc/`):
-
-| Dimension | Specification |
-| :--- | :--- |
-| **Raw / Cleaned Weekly Sessions** | `1,306` raw rows (`S0001–S1306`) $\to$ **`1,233`** Clean Primary Sessions (`Mode A`) & **`1,299`** Full Stress-Test Sessions (`Mode B`) |
-| **Programs & NTA Levels** | `29` Academic Programs across `10` NTA Level groupings (Levels `4` to `8`) |
-| **Student Cohorts** | `123` total (`121` active in schedule, with `197` joint-cohort combinations up to 6 cohorts/session) |
-| **Lecturers & Modules** | `175` Lecturers (1 to 5 co-lecturers per session) across `498` unique modules |
-| **Physical Venues** | `75` Venues (`25` Lecture Rooms, `20` Engineering/Science Labs, `14` Workshops, `10` Computer Labs, `5` Field Sites, `1` Studio) |
-| **Calendar Grid** | `6` Days (`MONDAY`–`SATURDAY`) $\times$ `18` Periods/Day (`45` minutes per period, `108` weekly slots) |
-| **Full-Time Stream** | Periods `P1–P12` (`07:30–17:55`), with Tea Break after `P4` and Lunch Break after `P6` |
-| **Evening Stream** | Periods `P13–P18` (`18:00–22:40`), with an optional Twilight Transition Buffer in `P11–P12` (`16:25–17:55`) |
+1. **Phase 3 — Exact CSP Solver (`src/csp/solver.py`):**
+   - Encodes the `6 days × 18 periods` (`108`-slot) weekly grid into a single Python integer bitmask for $O(1)$ overlap and venue-availability checks.
+   - Uses weekday-aware MRV + conflict-graph degree + block-duration ordering, 3-tier departmental venue affinity (with hard lab/workshop sub-pool locking), a strict 2-condition Saturday fallback (Mon–Fri default), and reversible eager forward checking (`undo_log`, zero `deepcopy`).
+   - Supports pre-solve **session pinning** (`pinned_assignments`) with unary/pairwise 108-bit validation before search begins.
+2. **Phase 4 — Pluggable Soft-Constraint Optimizer (`src/csp/optimizer.py`):**
+   - Declarative JSON-configured `@register_soft_constraint` registry supporting 7 built-in rules (`minimize_saturday_theory`, `minimize_saturday_overflow`, `prefer_shared_practicals_on_saturday`, `minimize_evening_twilight`, `minimize_cohort_idle_gaps`, `balance_weekly_workload`, `prefer_exact_module_venue`) plus custom runtime rules.
+   - Runs hard-constraint-preserving **Simulated Annealing** (`40,000` iterations) with $O(1)$ incremental $\Delta E$ scoring across guided single-session relocates and compatible pairwise swaps, strictly honoring `pinned_session_ids`.
 
 ---
 
-## 2. Mathematical Formulation $(X, D, C_{\text{hard}}, C_{\text{soft}})$
+## Verified Benchmarks (ATC Dataset)
 
-### Variables ($X$)
-Each weekly course session is a decision variable $x_i \in X$ with fixed attributes $(\text{moduleCode}_i, \text{lecturers}_i, \text{cohorts}_i, \text{stream}_i, \text{duration}_i \in \{1, 2, 4, 6\}, \text{category}_i)$.
-We evaluate two benchmark modes:
-* **Benchmark Mode A (Clean Primary Dataset, $|X| = 1,233$):** Primary venue-view schedule (`S0001–S1233`).
-* **Benchmark Mode B (Full Stress-Test Dataset, $|X| = 1,299$):** Retains `66` secondary cohort-view clone rows from `S1234–S1306` (after removing `7` pigeonhole-violating split-group duplicates `S1269–S1275` and trimming `S0253` to 2 periods) to stress-test the solver under heavy resource contention.
+Evaluated on the **Arusha Technical College (ATC)** master timetable (`75` venues, `175` lecturers, `121` active cohorts, `18` periods/day):
 
-### Factored Domains ($D$)
-Rather than branching over flat $(\text{Day}, \text{StartPeriod}, \text{Venue})$ triples, each domain $D_i = T_i \times V_i$ is factored into a **valid time-slot set** $T_i$ and a **prioritized compatible venue list** $V_i$:
-1. **Unary Time Filtering ($T_i$):** Computed declaratively from `configs/institution_schema.json`, enforcing stream windows, break non-crossing ($p \le b < p + d_i - 1$ for $b \in \{4, 6, 12\}$), and odd start-period alignment ($p \bmod 2 = 1$) for multi-period blocks ($d_i \ge 2$).
-2. **3-Tier Departmental Venue Affinity ($V_i$, `configs/atc_venue_affinity.json`):**
-   * **Hard Specialized Lab & Workshop Pinning:** For specialized physical infrastructure (`Engineering / Science Lab`, `Workshop`, `Studio`, `Field / Site`), $V_i$ is **strictly restricted** to the module's (`Tier 1A`) or department prefix's (`Tier 1C`) equipment pool—preventing an Automotive workshop (`AUT`/`AET`) from ever being placed in a Civil or Electrical lab.
-   * **Prioritized Soft Home-Turf Tiers:** For general categories (`Theory / Lecture Room`, `Computer / Digital Lab`), candidate rooms are ordered strictly by:
-     $$\text{Tier 1A (Exact Module)} \;\to\; \text{Tier 1B (Cohort Home Room)} \;\to\; \text{Tier 1C (Dept Prefix Pool)} \;\to\; \text{Tier 2 (General Category Overflow)}$$
-
-### Hard Constraints ($C_{\text{hard}}$)
-1. **Static Binary Conflict Graph $G_{\text{conflict}} = (X, E_{\text{conflict}})$:** An undirected edge $(x_i, x_j) \in E_{\text{conflict}}$ connects any two sessions sharing $\ge 1$ lecturer or $\ge 1$ target cohort ($17,454$ edges in Mode A; $20,003$ edges in Mode B; max degree $\Delta = 125$). Connected sessions cannot overlap in time.
-2. **Dynamic Room-Time Exclusivity:** No two sessions assigned to the same physical venue $v$ may overlap on any $(\text{Day}, \text{Period})$ slot.
-
-### Strict 2-Condition Saturday Fallback Policy (5-Day Default)
-All schedules default strictly to **Monday–Friday** (`60` Full-Time periods / `30` standard Evening periods). A session is placed on `SATURDAY` **if and only if**:
-* **Condition 1 (Cohort Time / Block Capacity Overflow):** At least one target cohort's weekly demand exceeds 5-day capacity (`> 60` Full-Time periods, `> 30` Evening periods, or `> 5` afternoon 6-period blocks), **OR**
-* **Condition 2 (Hard-Constraint Weekday Contention):** Every Monday–Friday slot is blocked by Lecturer, Cohort, or Departmental Lab hard constraints.
-
----
-
-## 3. Solver Architecture (`src/csp/`)
-
-`src/csp/solver.py` achieves sub-second, **0-backtrack** solving across all `1,233` and `1,299` variables through five core techniques:
-
-1. **Pre-Flight Pigeonhole Capacity Validator (`run_preflight_checks`):** Verifies before search begins that no lecturer, cohort, venue category, or restricted departmental lab sub-pool exceeds its weekly period supply.
-2. **108-Bit Bitwise Time Masks:** Encodes the $6 \text{ days} \times 18 \text{ periods} = 108$ weekly calendar grid into a single Python integer bitmask (`slot_bit = day_idx * 18 + (period - 1)`), reducing interval overlap and venue availability checks to a single bitwise instruction: `(venue_busy_mask[v] & time_mask) == 0`.
-3. **Weekday-Aware MRV + Degree + Block Rigidity (`select_unassigned_variable`):** Prioritizes sessions running low on Monday–Friday slots (`weekday_slot_count`) weighted by venue-pool tightness, breaking ties by conflict graph degree ($\deg \le 125$) and block duration ($6\text{p} \to 4\text{p} \to 2\text{p} \to 1\text{p}$). Once a heavy cohort exhausts its 60 Monday–Friday periods (`weekday_slot_count == 0`), its remaining sessions transition seamlessly to `SATURDAY`.
-4. **Lexicographic Affinity-Aware Value Ordering (`order_domain_values`):** Ranks candidate placements by:
-   ```python
-   (is_saturday, twilight_penalty, best_available_venue_tier, lcv_conflict_score, subtier_rank, day_load_spread)
-   ```
-   guaranteeing that Monday–Friday (`is_saturday == 0`) always takes precedence over Saturday (`is_saturday == 1`) while steering sessions into free Tier 1 departmental/cohort home rooms.
-5. **Reversible Eager Forward Checking (`forward_check` & `undo_log`):** Zero `copy.deepcopy` overhead. Prunes overlapping neighbor slots and exhausted room pools in real time using a lightweight reversible `undo_log`.
-
----
-
-## 4. Empirical Benchmark Results
-
-Comparison of the **Sundial CSP Solver** against the **Raw ATC Human Ground Truth**:
-
-| Metric | Mode A: Clean Primary (`1,233` Sessions) | Mode B: Full Stress-Test (`1,299` Sessions) | Raw ATC Ground Truth (`1,299` Sessions) |
+| Metric | Mode A: Clean Primary (`1,233` sessions) | Mode B: Full Stress-Test (`1,299` sessions) | Raw ATC Ground Truth (`1,299` sessions) |
 | :--- | :---: | :---: | :---: |
-| **Preflight Pigeonhole & Sub-Pool Check** | **`PASS`** | **`PASS`** | — |
-| **Conflict Graph Edges ($\vert E_{\text{conflict}} \vert$)** | `17,454` ($\max \deg = 125$) | `20,003` ($\max \deg = 125$) | `20,003` |
-| **Solve Status & Wall-Clock Runtime** | **`SOLVED` in `~0.66s – 1.10s`** | **`SOLVED` in `~0.73s – 1.15s`** | Human-authored |
-| **Recursive Nodes / Backtracks** | **`1,233` nodes / `0` backtracks** | **`1,299` nodes / `0` backtracks** | — |
-| **Hard Constraint Violations (Lec / Coh / Ven)** | **`0` pairs (`0` slot collisions)** | **`0` pairs (`0` slot collisions)** | **`81` pairs** (`71` Lec, `71` Coh, `77` Ven) |
-| **Specialized Lab / Workshop Dept Lock** | **`306 / 306` (`100.0%`)** | **`323 / 323` (`100.0%`)** | `100.0%` |
-| **Tier 1 Departmental & Home Room Affinity** | **`1,233 / 1,233` (`100.0%`)** | **`1,298 / 1,299` (`99.9%`)** | — |
-| — *Tier 1A: Exact Module Room Match* | `1,079 / 1,233` (`87.5%`) | `1,099 / 1,299` (`84.6%`) | — |
-| — *Tier 1B: Cohort Home Room Match* | `125 / 1,233` (`10.1%`) | `144 / 1,299` (`11.1%`) | — |
-| — *Tier 1C: Dept Prefix Pool Match* | `29 / 1,233` (`2.4%`) | `55 / 1,299` (`4.2%`) | — |
-| **Tier 2 General Classroom Overflow** | **`0 / 1,233` (`0.0%`)** | **`1 / 1,299` (`0.1%`)** | — |
-| **Saturday Sessions Placed** | **`17 / 1,233` (`1.4%`)** | **`39 / 1,299` (`3.0%`)** | `35` (Mode A) / `40` (Mode B) |
-| — *Condition 1 (`>60p` FT / `>30p` Eve Overflow)* | **`17 / 17` (`100%`)** | **`39 / 39` (`100%`)** | — |
-| — *Condition 2 (Hard-Constraint Bottleneck)* | **`0`** | **`0`** | — |
-| **100% Saturday-Free Cohorts (Mon–Fri Only)** | **`111 / 121` (`91.7%`)** | **`107 / 121` (`88.4%`)** | **`86 / 121` (`71.1%`)** |
+| **Phase 3 CSP Solve Time** | `0.99 s` (`992.54 ms`) | `1.05 s` (`1,051.79 ms`) | Human-authored |
+| **Phase 4 SA Optimization (`40,000` iter)** | `0.62 s` (`620.94 ms`) | `0.49 s` (`490.67 ms`) | — |
+| **Backtracks** | **`0`** | **`0`** | — |
+| **Hard Constraint Violations** | **`0`** (`0` Lec / `0` Coh / `0` Ven) | **`0`** (`0` Lec / `0` Coh / `0` Ven) | `81` conflicting pairs |
+| **Soft-Objective Reduction (SA)** | **`-41.16%`** (`37,877.5` $\to$ `22,287.5`) | **`-29.42%`** (`45,143.8` $\to$ `31,862.5`) | — |
+| **100% Saturday-Free Cohorts** | **`111 / 121` (`91.7%`)** | **`107 / 121` (`88.4%`)** | `86 / 121` (`71.1%`) |
+| **Tier-1 Departmental Venue Affinity** | **`1,230 / 1,233` (`99.8%`)** | **`1,296 / 1,299` (`99.8%`)** | — |
+| **Specialized Lab/Workshop Dept Lock** | **`306 / 306` (`100.0%`)** | **`323 / 323` (`100.0%`)** | `100.0%` |
 
 ---
 
-## 5. Repository Structure & Quickstart CLI
+## Repository Structure
 
 ```text
 sundial-engine/
 ├── configs/
-│   ├── institution_schema.json      # Declarative calendar grid, stream rules & venue categories
-│   └── atc_venue_affinity.json      # 3-Tier departmental venue affinity & hard lab sub-pool rules
+│   ├── institution_schema.json      # Calendar grid, streams, venue rules, soft constraints & SA config
+│   └── atc_venue_affinity.json      # 3-tier departmental venue affinity & hard lab sub-pools
 ├── data/
-│   ├── raw/atc/                     # ATC master dataset (atc-timetable-dataset.json, atc-csp-sessions.json)
-│   └── processed/                   # Solver-exported JSON bundle (timetable_view_data.json)
-├── docs/
-│   └── EDA_FINDINGS.md              # Empirical constraint discoveries & data anomaly analysis
-├── notebooks/
-│   └── 01_eda.py                    # Phase 1 exploratory data analysis & constraint audit
+│   ├── raw/atc/                     # Raw ATC benchmark JSON datasets
+│   ├── uploads/                     # Uploaded logos & normalized custom CSV/JSON entities
+│   └── processed/                   # Persisted app_state.json & exported timetable_view_data.json
 ├── src/
-│   ├── csp/
-│   │   ├── domain.py                # Unary domain generator & pre-flight pigeonhole capacity checks
-│   │   ├── constraints.py           # Conflict graph builder & ground-truth collision auditor
-│   │   ├── affinity.py              # Departmental venue affinity miner & 3-tier room resolver
-│   │   └── solver.py                # Bitmask backtracking solver, LCV heuristics & solution verifier
-│   └── viz/
-│       ├── exporter.py              # JSON & offline JS payload exporter for the web visualizer
-│       ├── viewer.py                # Local HTTP server launcher for the web visualizer
-│       └── index.html               # Single-page timetable visualizer & A4 Landscape PDF renderer
-└── requirements.txt
+│   ├── csp/                         # 100% pure Python 3 stdlib engine (zero external deps)
+│   │   ├── domain.py                # Declarative domain builder & pigeonhole pre-flight checks
+│   │   ├── constraints.py           # Conflict graph builder & ground-truth clash auditor
+│   │   ├── affinity.py              # 3-tier venue affinity resolver & specialized lab lock
+│   │   ├── solver.py                # Phase 3 108-bit backtracking CSP solver with session pinning
+│   │   └── optimizer.py             # Phase 4 pluggable soft-constraint engine & SA optimizer
+│   ├── api/                         # Self-hosted FastAPI backend
+│   │   ├── main.py                  # App factory, CORS, auth/pin routes & router mounting
+│   │   ├── auth.py                  # Stateless HMAC-SHA256 single-admin bearer auth (24h expiry)
+│   │   ├── state.py                 # Thread-safe persistent workspace manager (app_state.json)
+│   │   ├── routes_settings.py       # Branding, logo upload & schema configuration routes
+│   │   ├── routes_onboarding.py     # Independent CSV/JSON upload, templates & row validation
+│   │   ├── routes_solve.py          # Phase 3 + Phase 4 solve endpoint & Saturday explanations
+│   │   └── routes_public.py         # Public unauthenticated timetable consumer endpoint
+│   └── viz/                         # Standalone static HTML/PDF timetable exporter & viewer
+├── frontend/                        # React + TypeScript + Vite web application
+│   ├── vite.config.ts               # Dev proxy (/api -> http://localhost:8000)
+│   └── src/
+│       ├── api/client.ts            # Typed fetch wrapper with Bearer token handling
+│       ├── components/              # TimetableGrid, SearchableSelect, SundialMark
+│       └── pages/                   # PublicLookup (/), AdminLogin (/login), StudioShell (/studio)
+├── scripts/
+│   └── verify_sprint2.py            # Live HTTP end-to-end API smoke test suite
+└── tests/
+    ├── test_optimizer.py            # Phase 4 soft-constraint & SA unit tests
+    └── test_pinning_and_api.py      # Session pinning, auth, state & API unit tests
 ```
-
-### Quickstart Commands
-
-```bash
-# 1. Run Exploratory Data Analysis
-python notebooks/01_eda.py
-
-# 2. Generate / Refresh Departmental Venue Affinity Rules
-python src/csp/affinity.py
-
-# 3. Validate Unary Domains & Pre-Flight Pigeonhole Bounds
-python src/csp/domain.py
-
-# 4. Audit Conflict Graph & Raw Ground-Truth Collisions
-python src/csp/constraints.py
-
-# 5. Run the CSP Solver & Export Solved Timetables
-python src/csp/solver.py
-
-# 6. Launch Interactive Web Visualizer & A4 Landscape PDF Renderer
-python src/viz/viewer.py
-```
-*(You can also open `src/viz/index.html` directly in any browser without starting a server.)*
 
 ---
 
-## 6. Roadmap: Phase 4 (Soft-Constraint Local Search & Schedule Compaction)
+## API Reference (`src/api/`)
 
-With Phase 3 delivering a 0-conflict, 100% department-locked initial feasible solution in `< 1.2s`, Phase 4 will add a post-solve **Simulated Annealing / Min-Conflicts Local Search Optimizer** on top of the CSP solution to optimize soft pedagogical quality ($C_{\text{soft}}$):
-* **Intra-Day Idle Gap Compaction:** Minimize empty periods between a cohort's first and last class of the day.
-* **Evening Twilight Buffer Minimization:** Further reduce `P11–P12` twilight usage by swapping non-conflicting evening blocks into `P13–P18`.
-* **Room Stability & Building Clustering:** Minimize mid-day room switches for consecutive lectures taught to the same cohort.
+Interactive OpenAPI / Swagger UI documentation is available when the backend is running at **`http://localhost:8000/docs`** (ReDoc at `http://localhost:8000/redoc`).
+
+### Health & Public Consumer
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/health` | Public | Returns server status, active dataset mode, session count, and pin count. |
+| `GET` | `/api/public/timetable` | Public | Returns branding, grid config, sorted `entities` (`cohorts`, `lecturers`, `venues`), and scheduled `sessions`. |
+| `GET` | `/api/public/logo` | Public | Serves the uploaded institution logo image (`404` if none uploaded). |
+
+### Authentication
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/login` | Public | Verifies single-admin credentials and returns a 24-hour HMAC-SHA256 bearer token. |
+| `GET` | `/api/auth/me` | Admin Bearer | Validates the bearer token and returns the authenticated admin claims. |
+
+### Institution Settings & Branding
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/settings` | Admin Bearer | Returns `branding` and `schema_config` from `app_state.json`. |
+| `PUT` | `/api/settings/branding` | Admin Bearer | Updates `institution_name` and `semester_title` and persists state. |
+| `POST` | `/api/settings/logo` | Admin Bearer | Uploads a PNG/JPG/SVG/WEBP logo (max 2 MB) to `data/uploads/logo.<ext>` and sets `logo_url`. |
+| `PUT` | `/api/settings/schema` | Admin Bearer | Validates and persists an updated `schema_config` (returns `400` with field errors if invalid). |
+| `POST` | `/api/settings/schema/reset` | Admin Bearer | Resets `schema_config` back to `configs/institution_schema.json`. |
+
+### Data Onboarding & Pre-Flight Validation
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/onboarding/status` | Admin Bearer | Returns filename, row count, timestamp, and source (`preloaded_atc` vs `custom_upload`) per entity. |
+| `GET` | `/api/onboarding/templates/{entity}` | Admin Bearer | Downloads a CSV template (`venues`, `lecturers`, or `sessions`) with exact headers and 2 sample rows. |
+| `POST` | `/api/onboarding/upload/{entity}` | Admin Bearer | Uploads and normalizes a `.csv` or `.json` file for one entity without overwriting other entities. |
+| `POST` | `/api/onboarding/validate` | Admin Bearer | Runs pigeonhole pre-flight and referential integrity checks, returning row-level `errors` and `warnings`. |
+
+### Solver & Session Pinning
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/solve` | Admin Bearer | Validates data, runs Phase 3 CSP + Phase 4 SA (honoring active pins), persists `active_timetable`, and returns KPIs, scorecard, and Condition 1 `saturday_explanations`. |
+| `GET` | `/api/pins` | Public | Lists all currently pinned sessions and their locked `(day, start_period, venue_id)` slots. |
+| `PUT` | `/api/pins/{session_id}` | Admin Bearer | Validates (unary + pairwise 108-bit clash check) and pins `session_id` to `(day, start_period, venue_id)`. *(Also accepts `POST /api/pins` with `session_id` in the body.)* |
+| `DELETE` | `/api/pins/{session_id}` | Admin Bearer | Removes the pin for a specific `session_id`. |
+| `DELETE` | `/api/pins` | Admin Bearer | Clears all active session pins. |
+
+---
+
+## How to Run the System
+
+### 1. Prerequisites
+- **Python 3.11+** (tested on Python 3.14 in `.venv`)
+- **Node.js 18+** and `npm`
+
+### 2. Backend Setup & Start (FastAPI)
+
+```bash
+# Activate virtual environment and install dependencies
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Optional environment variables (defaults shown below)
+export SUNDIAL_ADMIN_USER="admin"
+export SUNDIAL_ADMIN_PASS="sundial-admin"
+export SUNDIAL_SECRET_KEY="sundial-dev-secret-key-change-in-production"
+
+# Start FastAPI backend on http://localhost:8000 (Swagger docs at /docs)
+uvicorn src.api.main:app --reload --port 8000
+```
+
+On first boot, `data/processed/app_state.json` is automatically initialized with the preloaded ATC Clean Primary Dataset (Mode A, `1,233` sessions).
+
+### 3. Frontend Setup & Start (React + Vite)
+
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend runs on **`http://localhost:5173`** and automatically proxies `/api/*` requests to `http://localhost:8000`.
+- Public Timetable Front Door: `http://localhost:5173/`
+- Registrar Login: `http://localhost:5173/login`
+- Protected Studio: `http://localhost:5173/studio`
+
+### 4. Standalone Pure-Python Engine & Automated Tests
+
+```bash
+# Run standalone pure-Python CSP + SA benchmark (Mode A & Mode B)
+python3 src/csp/solver.py
+
+# Run all unit tests (optimizer, session pinning, auth & API)
+python3 -m unittest discover -s tests -v
+
+# Run end-to-end HTTP smoke verification against a live uvicorn instance
+python3 scripts/verify_sprint2.py
+```
