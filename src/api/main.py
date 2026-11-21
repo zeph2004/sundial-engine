@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +17,10 @@ from src.api.auth import (
     require_admin,
     verify_admin_credentials,
 )
+from src.api.routes_onboarding import router as onboarding_router
+from src.api.routes_public import router as public_router
+from src.api.routes_settings import router as settings_router
+from src.api.routes_solve import router as solve_router
 from src.api.state import AppStateManager
 
 
@@ -44,17 +48,11 @@ class PinSessionRequest(BaseModel):
     venue_id: int | str
 
 
-class SolveWorkspaceRequest(BaseModel):
-    run_optimizer: bool = True
-    max_iterations: Optional[int] = None
-    pinned_assignments: Optional[Dict[str, Tuple[int | str, int, int | str]]] = None
-
-
 def create_app(state_manager: Optional[AppStateManager] = None) -> FastAPI:
     app = FastAPI(
         title="Sundial Engine — Academic Timetabling CSP & SA Optimizer API",
-        version="1.0.0",
-        description="Single-institution academic timetable solver with session pinning & simulated annealing optimization.",
+        version="1.1.0",
+        description="Single-institution academic timetable solver with onboarding, settings, session pinning, and simulated annealing optimization.",
     )
 
     app.add_middleware(
@@ -68,7 +66,13 @@ def create_app(state_manager: Optional[AppStateManager] = None) -> FastAPI:
     manager = state_manager or AppStateManager()
     app.state.manager = manager
 
-    @app.get("/api/health")
+    # Mount Sprint 2 modular routers
+    app.include_router(settings_router)
+    app.include_router(onboarding_router)
+    app.include_router(solve_router)
+    app.include_router(public_router)
+
+    @app.get("/api/health", tags=["System"])
     def health_check() -> Dict[str, Any]:
         return {
             "status": "ok",
@@ -77,7 +81,7 @@ def create_app(state_manager: Optional[AppStateManager] = None) -> FastAPI:
             "pinned": len(manager.state.get("pinned_assignments", {})),
         }
 
-    @app.post("/api/auth/login", response_model=TokenResponse)
+    @app.post("/api/auth/login", response_model=TokenResponse, tags=["Authentication"])
     def login(req: LoginRequest) -> TokenResponse:
         if not verify_admin_credentials(req.username, req.password):
             raise HTTPException(
@@ -88,34 +92,34 @@ def create_app(state_manager: Optional[AppStateManager] = None) -> FastAPI:
         token = create_access_token(username=req.username)
         return TokenResponse(access_token=token)
 
-    @app.get("/api/auth/me")
+    @app.get("/api/auth/me", tags=["Authentication"])
     def auth_me(claims: Dict[str, Any] = Depends(require_admin)) -> Dict[str, Any]:
         return {"authenticated": True, "admin": claims}
 
-    @app.get("/api/state")
+    @app.get("/api/state", tags=["Workspace State"])
     def get_state_summary() -> Dict[str, Any]:
         return manager.get_summary()
 
-    @app.get("/api/state/full")
-    def get_full_state() -> Dict[str, Any]:
+    @app.get("/api/state/full", tags=["Workspace State"])
+    def get_full_state(_admin: Dict[str, Any] = Depends(require_admin)) -> Dict[str, Any]:
         return manager.state
 
-    @app.put("/api/branding")
-    def update_branding(
+    @app.put("/api/branding", tags=["Settings & Branding"])
+    def update_branding_compat(
         req: BrandingUpdateRequest,
         _admin: Dict[str, Any] = Depends(require_admin),
     ) -> Dict[str, Any]:
         updates = {k: v for k, v in req.model_dump().items() if v is not None or k == "logo_url"}
         return manager.update_branding(updates)
 
-    @app.get("/api/pins")
+    @app.get("/api/pins", tags=["Session Pinning"])
     def list_pins() -> Dict[str, Any]:
         return {
             "pinned_count": len(manager.state.get("pinned_assignments", {})),
             "pinned_assignments": manager.state.get("pinned_assignments", {}),
         }
 
-    @app.post("/api/pins")
+    @app.post("/api/pins", tags=["Session Pinning"])
     def pin_session(
         req: PinSessionRequest,
         _admin: Dict[str, Any] = Depends(require_admin),
@@ -134,7 +138,7 @@ def create_app(state_manager: Optional[AppStateManager] = None) -> FastAPI:
                 detail=str(exc),
             ) from exc
 
-    @app.delete("/api/pins/{session_id}")
+    @app.delete("/api/pins/{session_id}", tags=["Session Pinning"])
     def unpin_session(
         session_id: str,
         _admin: Dict[str, Any] = Depends(require_admin),
@@ -142,30 +146,12 @@ def create_app(state_manager: Optional[AppStateManager] = None) -> FastAPI:
         removed = manager.remove_pin(session_id)
         return {"status": "unpinned" if removed else "not_found", "session_id": session_id}
 
-    @app.delete("/api/pins")
+    @app.delete("/api/pins", tags=["Session Pinning"])
     def clear_all_pins(
         _admin: Dict[str, Any] = Depends(require_admin),
     ) -> Dict[str, Any]:
         cleared = manager.clear_pins()
         return {"status": "cleared", "cleared_count": cleared}
-
-    @app.post("/api/solve")
-    def solve_timetable(
-        req: Optional[SolveWorkspaceRequest] = None,
-        _admin: Dict[str, Any] = Depends(require_admin),
-    ) -> Dict[str, Any]:
-        body = req or SolveWorkspaceRequest()
-        try:
-            return manager.solve_workspace(
-                pinned_assignments=body.pinned_assignments,
-                run_optimizer=body.run_optimizer,
-                max_iterations=body.max_iterations,
-            )
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
 
     return app
 
