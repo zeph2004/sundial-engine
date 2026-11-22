@@ -82,6 +82,147 @@ export interface AdminMeResponse {
   };
 }
 
+export interface SchemaPeriodRow {
+  period_number: number;
+  start_time: string;
+  end_time: string;
+}
+
+export interface DayOverrideConfig {
+  apply_override?: boolean;
+  day_active?: boolean;
+  blocked_periods?: number[];
+  additional_breaks_after_periods?: number[];
+  max_period?: number;
+  comment?: string;
+  [key: string]: unknown;
+}
+
+export interface SchemaCalendarGrid {
+  active_days: string[];
+  periods_per_day: number;
+  period_duration_minutes?: number;
+  breaks_after_periods: number[];
+  enforce_odd_start_alignment_for_multi_period?: boolean;
+  periods?: SchemaPeriodRow[];
+  day_overrides?: Record<string, DayOverrideConfig>;
+  [key: string]: unknown;
+}
+
+export interface SchemaStreamConfig {
+  is_evening_stream?: boolean;
+  min_period: number;
+  max_period: number;
+  supported_durations: number[];
+  allow_stream_boundary_crossing?: boolean;
+  twilight_buffer?: {
+    enabled: boolean;
+    buffer_min_period: number;
+    buffer_max_period: number;
+    allow_bridge_into_evening?: boolean;
+    soft_penalty_weight?: number;
+    comment?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export interface SchemaConfig {
+  schema_version?: string;
+  institution?: Record<string, unknown>;
+  calendar_grid: SchemaCalendarGrid;
+  streams: {
+    full_time: SchemaStreamConfig;
+    evening: SchemaStreamConfig;
+    [key: string]: unknown;
+  };
+  venue_rules: {
+    compatibility_map: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+  soft_constraints?: Record<string, unknown>;
+  optimizer?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface SettingsResponse {
+  branding: Branding;
+  schema_config: SchemaConfig;
+}
+
+export interface BrandingUpdatePayload {
+  institution_name?: string;
+  semester_title?: string;
+}
+
+export interface BrandingUpdateResponse {
+  status: string;
+  branding: Branding;
+}
+
+export interface LogoUploadResponse {
+  status: string;
+  filename: string;
+  branding: Branding;
+}
+
+export interface SchemaUpdateResponse {
+  status: string;
+  schema_config: SchemaConfig;
+}
+
+export type OnboardingEntityKey = "venues" | "lecturers" | "sessions";
+
+export interface OnboardingSourceInfo {
+  filename: string;
+  row_count: number;
+  input_rows?: number;
+  mode?: string;
+  period_duration_minutes?: number;
+  updated_at: string;
+  source: "preloaded_atc" | "custom_upload" | string;
+}
+
+export interface OnboardingStatusResponse {
+  dataset_mode: string;
+  entities: {
+    venues?: OnboardingSourceInfo;
+    lecturers?: OnboardingSourceInfo;
+    sessions?: OnboardingSourceInfo;
+    affinity?: OnboardingSourceInfo;
+    [key: string]: OnboardingSourceInfo | undefined;
+  };
+}
+
+export interface UploadEntityResponse {
+  entity: string;
+  mode?: "allocations_hours" | "allocations_periods" | "legacy_sessions" | string;
+  input_rows?: number;
+  rows_loaded: number;
+  period_duration_minutes?: number;
+  warnings: string[];
+}
+
+export interface PreflightIssue {
+  entity: string;
+  row: number | null;
+  id: string | null;
+  code: string;
+  message: string;
+}
+
+export interface PreflightValidationResponse {
+  passed: boolean;
+  summary: {
+    sessions: number;
+    cohorts: number;
+    lecturers: number;
+    venues: number;
+  };
+  errors: PreflightIssue[];
+  warnings: PreflightIssue[];
+}
+
 export type LensType = "cohort" | "lecturer" | "venue";
 
 const TOKEN_KEY = "sundial_admin_token";
@@ -174,4 +315,109 @@ export async function loginAdmin(
 
 export async function getAdminMe(): Promise<AdminMeResponse> {
   return apiFetch<AdminMeResponse>("/api/auth/me");
+}
+
+/* ==========================================================================
+   Settings & Branding Endpoints (Sprint 2 / Sprint 4)
+   ========================================================================== */
+
+export async function getSettings(): Promise<SettingsResponse> {
+  return apiFetch<SettingsResponse>("/api/settings");
+}
+
+export async function updateBranding(
+  payload: BrandingUpdatePayload
+): Promise<BrandingUpdateResponse> {
+  return apiFetch<BrandingUpdateResponse>("/api/settings/branding", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadLogo(file: File): Promise<LogoUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiFetch<LogoUploadResponse>("/api/settings/logo", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function updateSchema(
+  schemaConfig: SchemaConfig
+): Promise<SchemaUpdateResponse> {
+  return apiFetch<SchemaUpdateResponse>("/api/settings/schema", {
+    method: "PUT",
+    body: JSON.stringify({ schema_config: schemaConfig }),
+  });
+}
+
+export async function resetSchema(): Promise<SchemaUpdateResponse> {
+  return apiFetch<SchemaUpdateResponse>("/api/settings/schema/reset", {
+    method: "POST",
+  });
+}
+
+/* ==========================================================================
+   Data Onboarding & Pre-Flight Endpoints (Sprint 2 / Sprint 4)
+   ========================================================================== */
+
+export async function getOnboardingStatus(): Promise<OnboardingStatusResponse> {
+  return apiFetch<OnboardingStatusResponse>("/api/onboarding/status");
+}
+
+export async function downloadTemplate(
+  entity: OnboardingEntityKey
+): Promise<void> {
+  const token = getStoredToken();
+  const headers = new Headers();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(`/api/onboarding/templates/${entity}`, {
+    method: "GET",
+    headers,
+  });
+
+  if (!res.ok) {
+    let message = `Could not download ${entity} template (${res.status})`;
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") {
+        message = data.detail;
+      }
+    } catch {
+      // ignore non-JSON body
+    }
+    throw new ApiError(res.status, message);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${entity}_template.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function uploadEntityFile(
+  entity: OnboardingEntityKey,
+  file: File
+): Promise<UploadEntityResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiFetch<UploadEntityResponse>(`/api/onboarding/upload/${entity}`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function runPreflightValidation(): Promise<PreflightValidationResponse> {
+  return apiFetch<PreflightValidationResponse>("/api/onboarding/validate", {
+    method: "POST",
+  });
 }

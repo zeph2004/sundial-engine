@@ -168990,5 +168990,149 @@
         }
       ]
     }
+  },
+  "activeSolve": {
+    "generatedAt": "2026-11-22T09:29:40.295983+00:00",
+    "branding": {
+      "institution_name": "Arusha Technical College",
+      "semester_title": "Academic Year 2026/27 \u2014 Semester 1",
+      "logo_url": null
+    },
+    "kpis": {
+      "total_sessions": 5,
+      "assigned_sessions": 5,
+      "backtracks": 0,
+      "hard_violations": 0,
+      "tier1_affinity_pct": 100.0,
+      "tier1a_exact_pct": 100.0,
+      "saturday_sessions": 0,
+      "saturday_theory_sessions": 0,
+      "saturday_free_cohorts": 2,
+      "total_cohorts": 2,
+      "saturday_free_cohorts_pct": 100.0,
+      "evening_twilight_sessions": 0,
+      "objective_improvement_pct": 0.0
+    },
+    "scorecard": {
+      "enabled": false
+    },
+    "saturdayExplanations": [],
+    "sessions": [
+      {
+        "session_id": "ALLOC_001_1",
+        "module_code": "BUS 101",
+        "module_name": "Accounting",
+        "session_type": "Theory",
+        "day_idx": 0,
+        "day": "MONDAY",
+        "start_period": 1,
+        "duration_periods": 2,
+        "venue_id": 101,
+        "venue_name": "Lecture Hall A",
+        "venue_tier": "Tier 1A: Module Preferred",
+        "cohorts": [
+          "BBA1"
+        ],
+        "lecturers": [
+          "Dr. Amina"
+        ],
+        "is_evening_stream": false,
+        "is_twilight": false,
+        "is_pinned": false,
+        "saturday_reason": "Weekday"
+      },
+      {
+        "session_id": "ALLOC_001_2",
+        "module_code": "BUS 101",
+        "module_name": "Accounting",
+        "session_type": "Theory",
+        "day_idx": 1,
+        "day": "TUESDAY",
+        "start_period": 1,
+        "duration_periods": 2,
+        "venue_id": 101,
+        "venue_name": "Lecture Hall A",
+        "venue_tier": "Tier 1A: Module Preferred",
+        "cohorts": [
+          "BBA1"
+        ],
+        "lecturers": [
+          "Dr. Amina"
+        ],
+        "is_evening_stream": false,
+        "is_twilight": false,
+        "is_pinned": false,
+        "saturday_reason": "Weekday"
+      },
+      {
+        "session_id": "ALLOC_002_1",
+        "module_code": "LAW 102",
+        "module_name": "Contract Law",
+        "session_type": "Theory",
+        "day_idx": 2,
+        "day": "WEDNESDAY",
+        "start_period": 1,
+        "duration_periods": 2,
+        "venue_id": 101,
+        "venue_name": "Lecture Hall A",
+        "venue_tier": "Tier 1A: Module Preferred",
+        "cohorts": [
+          "BBA1"
+        ],
+        "lecturers": [
+          "Dr. Juma"
+        ],
+        "is_evening_stream": false,
+        "is_twilight": false,
+        "is_pinned": false,
+        "saturday_reason": "Weekday"
+      },
+      {
+        "session_id": "ALLOC_002_2",
+        "module_code": "LAW 102",
+        "module_name": "Contract Law",
+        "session_type": "Theory",
+        "day_idx": 3,
+        "day": "THURSDAY",
+        "start_period": 1,
+        "duration_periods": 2,
+        "venue_id": 101,
+        "venue_name": "Lecture Hall A",
+        "venue_tier": "Tier 1A: Module Preferred",
+        "cohorts": [
+          "BBA1"
+        ],
+        "lecturers": [
+          "Dr. Juma"
+        ],
+        "is_evening_stream": false,
+        "is_twilight": false,
+        "is_pinned": false,
+        "saturday_reason": "Weekday"
+      },
+      {
+        "session_id": "ALLOC_003_1",
+        "module_code": "BUS 201",
+        "module_name": "Economics",
+        "session_type": "Theory",
+        "day_idx": 2,
+        "day": "WEDNESDAY",
+        "start_period": 1,
+        "duration_periods": 2,
+        "venue_id": 102,
+        "venue_name": "Lecture Hall B",
+        "venue_tier": "Tier 1A: Module Preferred",
+        "cohorts": [
+          "BBA2"
+        ],
+        "lecturers": [
+          "Dr. Amina"
+        ],
+        "is_evening_stream": false,
+        "is_twilight": false,
+        "is_pinned": false,
+        "saturday_reason": "Weekday"
+      }
+    ]
   }
 }

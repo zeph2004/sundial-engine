@@ -465,6 +465,7 @@ class AppStateManager:
         entity: str,
         rows: List[Dict[str, Any]],
         filename: str,
+        extra_meta: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Updates a single onboarding entity (`venues`, `lecturers`, or `sessions`) independently."""
         with self._lock:
@@ -472,12 +473,15 @@ class AppStateManager:
             self.state[entity] = rows
             self.state["dataset_mode"] = "custom_upload"
             sources = self.state.setdefault("onboarding_sources", {})
-            sources[entity] = {
+            entry: Dict[str, Any] = {
                 "filename": filename,
                 "row_count": len(rows),
                 "updated_at": now_iso,
                 "source": "custom_upload",
             }
+            if extra_meta:
+                entry.update(extra_meta)
+            sources[entity] = entry
             # If sessions or venues were replaced with custom uploads, clear stale pins for missing IDs
             if entity == "sessions":
                 valid_sids = {s["sessionId"] for s in rows}
@@ -753,10 +757,17 @@ class AppStateManager:
 
         # Run pigeonhole preflight checks if schema and basic datasets exist
         if not schema_errs and sessions and venues:
-            # Use affinity config only if dataset is preloaded ATC (custom uploads may have different venue IDs)
+            # Use affinity config only if dataset is preloaded ATC and includes non-Theory sessions
+            has_specialized_sessions = any(
+                str(s.get("requiredVenueCategory", "")).strip() != "Theory / Lecture Room"
+                for s in sessions
+            )
             active_affinity = (
                 affinity_config
-                if self.state.get("dataset_mode") != "custom_upload"
+                if (
+                    self.state.get("dataset_mode") != "custom_upload"
+                    and has_specialized_sessions
+                )
                 else None
             )
             preflight = run_preflight_checks(

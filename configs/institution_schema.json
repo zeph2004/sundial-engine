@@ -47,14 +47,14 @@
       "is_evening_stream": false,
       "min_period": 1,
       "max_period": 12,
-      "supported_durations": [1, 2, 4, 6],
+      "supported_durations": [1, 2, 3, 4, 6],
       "allow_stream_boundary_crossing": false
     },
     "evening": {
       "is_evening_stream": true,
       "min_period": 13,
       "max_period": 18,
-      "supported_durations": [1, 2, 4, 6],
+      "supported_durations": [1, 2, 3, 4, 6],
       "twilight_buffer": {
         "enabled": true,
         "buffer_min_period": 11,

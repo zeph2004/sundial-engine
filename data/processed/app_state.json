@@ -1,12 +1,12 @@
 {
   "version": "1.0.0",
   "created_at": "2026-11-20T14:52:20.206927+00:00",
-  "updated_at": "2026-11-21T15:04:28.921843+00:00",
+  "updated_at": "2026-11-22T09:33:36.694351+00:00",
   "dataset_mode": "1233_clean",
   "branding": {
     "institution_name": "Arusha Technical College",
     "semester_title": "Academic Year 2026/27 \u2014 Semester 1",
-    "logo_url": null
+    "logo_url": "/api/public/logo"
   },
   "schema": {
     "schema_version": "1.0.0",
@@ -58,7 +58,99 @@
           "blocked_periods": [],
           "max_period": 0
         }
-      }
+      },
+      "periods": [
+        {
+          "period_number": 1,
+          "start_time": "07:30",
+          "end_time": "08:15"
+        },
+        {
+          "period_number": 2,
+          "start_time": "08:15",
+          "end_time": "09:00"
+        },
+        {
+          "period_number": 3,
+          "start_time": "09:05",
+          "end_time": "09:50"
+        },
+        {
+          "period_number": 4,
+          "start_time": "09:50",
+          "end_time": "10:35"
+        },
+        {
+          "period_number": 5,
+          "start_time": "11:00",
+          "end_time": "11:45"
+        },
+        {
+          "period_number": 6,
+          "start_time": "11:45",
+          "end_time": "12:30"
+        },
+        {
+          "period_number": 7,
+          "start_time": "13:15",
+          "end_time": "14:00"
+        },
+        {
+          "period_number": 8,
+          "start_time": "14:00",
+          "end_time": "14:45"
+        },
+        {
+          "period_number": 9,
+          "start_time": "14:50",
+          "end_time": "15:35"
+        },
+        {
+          "period_number": 10,
+          "start_time": "15:35",
+          "end_time": "16:20"
+        },
+        {
+          "period_number": 11,
+          "start_time": "16:25",
+          "end_time": "17:10"
+        },
+        {
+          "period_number": 12,
+          "start_time": "17:10",
+          "end_time": "17:55"
+        },
+        {
+          "period_number": 13,
+          "start_time": "18:00",
+          "end_time": "18:45"
+        },
+        {
+          "period_number": 14,
+          "start_time": "18:45",
+          "end_time": "19:30"
+        },
+        {
+          "period_number": 15,
+          "start_time": "19:35",
+          "end_time": "20:20"
+        },
+        {
+          "period_number": 16,
+          "start_time": "20:20",
+          "end_time": "21:05"
+        },
+        {
+          "period_number": 17,
+          "start_time": "21:10",
+          "end_time": "21:55"
+        },
+        {
+          "period_number": 18,
+          "start_time": "21:55",
+          "end_time": "22:40"
+        }
+      ]
     },
     "streams": {
       "full_time": {
@@ -154,7 +246,7 @@
     "soft_constraints": {
       "minimize_saturday_theory": {
         "enabled": true,
-        "weight": 150.0,
+        "weight": 150,
         "params": {
           "theory_types": [
             "Theory",
@@ -165,12 +257,12 @@
       },
       "minimize_saturday_overflow": {
         "enabled": true,
-        "weight": 100.0,
+        "weight": 100,
         "params": {}
       },
       "prefer_shared_practicals_on_saturday": {
         "enabled": true,
-        "weight": 80.0,
+        "weight": 80,
         "params": {
           "theory_types": [
             "Theory",
@@ -178,13 +270,13 @@
             "Tutorial"
           ],
           "min_shared_cohorts": 2,
-          "solo_practical_multiplier": 1.0,
-          "theory_multiplier": 2.0
+          "solo_practical_multiplier": 1,
+          "theory_multiplier": 2
         }
       },
       "minimize_evening_twilight": {
         "enabled": true,
-        "weight": 60.0,
+        "weight": 60,
         "params": {
           "twilight_periods": [
             11,
@@ -194,28 +286,28 @@
       },
       "minimize_cohort_idle_gaps": {
         "enabled": true,
-        "weight": 25.0,
+        "weight": 25,
         "params": {
           "allowed_weekday_free_gaps": 2
         }
       },
       "balance_weekly_workload": {
         "enabled": true,
-        "weight": 20.0,
+        "weight": 20,
         "params": {
-          "cohort_weight": 1.0,
+          "cohort_weight": 1,
           "lecturer_weight": 0.5
         }
       },
       "prefer_exact_module_venue": {
         "enabled": true,
-        "weight": 10.0,
+        "weight": 10,
         "params": {
           "tier_penalties": {
-            "1A": 0.0,
-            "1B": 1.0,
-            "1C": 2.0,
-            "2": 5.0
+            "2": 5,
+            "1A": 0,
+            "1B": 1,
+            "1C": 2
           }
         }
       }
@@ -223,7 +315,7 @@
     "optimizer": {
       "enabled": true,
       "max_iterations": 40000,
-      "initial_temperature": 120.0,
+      "initial_temperature": 120,
       "cooling_rate": 0.99985,
       "min_temperature": 0.05,
       "swap_probability": 0.45,
@@ -70988,7 +71080,7 @@
       }
     }
   },
-  "logo_file": null,
+  "logo_file": "logo.png",
   "lecturers": [
     {
       "lecturerId": "L001",

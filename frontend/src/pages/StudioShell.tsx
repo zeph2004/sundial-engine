@@ -11,12 +11,15 @@ import {
   getAdminMe,
   getPublicTimetable,
   logoutAdmin,
+  type Branding,
   type LensType,
   type PublicTimetableResponse,
 } from "../api/client";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { SundialMark } from "../components/SundialMark";
 import { TimetableGrid } from "../components/TimetableGrid";
+import { DataOnboarding } from "./DataOnboarding";
+import { InstitutionSettings } from "./InstitutionSettings";
 
 type StudioTab = "timetable" | "onboarding" | "settings";
 
@@ -29,8 +32,32 @@ export const StudioShell: React.FC = () => {
   const [timetable, setTimetable] = useState<PublicTimetableResponse | null>(
     null
   );
+  const [branding, setBranding] = useState<Branding | null>(null);
+  const [logoCacheKey, setLogoCacheKey] = useState<number>(() => Date.now());
+  const [logoBroken, setLogoBroken] = useState(false);
   const [lens, setLens] = useState<LensType>("cohort");
   const [selectedId, setSelectedId] = useState<string>("");
+
+  const refreshTimetable = () => {
+    getPublicTimetable()
+      .then((tt) => {
+        setTimetable(tt);
+        setBranding(tt.branding);
+        setSelectedId((prev) => {
+          const list =
+            lens === "cohort"
+              ? tt.entities.cohorts
+              : lens === "lecturer"
+                ? tt.entities.lecturers
+                : tt.entities.venues;
+          if (prev && list.some((e) => e.id === prev)) return prev;
+          return list[0]?.id ?? "";
+        });
+      })
+      .catch(() => {
+        // Keep existing timetable view on transient error
+      });
+  };
 
   useEffect(() => {
     let active = true;
@@ -44,6 +71,7 @@ export const StudioShell: React.FC = () => {
       .then((tt) => {
         if (!active || !tt) return;
         setTimetable(tt);
+        setBranding(tt.branding);
         const firstCohort = tt.entities.cohorts[0]?.id ?? "";
         setSelectedId(firstCohort);
       })
@@ -57,6 +85,18 @@ export const StudioShell: React.FC = () => {
       active = false;
     };
   }, [navigate]);
+
+  const handleBrandingUpdated = (
+    nextBranding: Branding,
+    nextLogoCacheKey: number
+  ) => {
+    setBranding(nextBranding);
+    setLogoCacheKey(nextLogoCacheKey);
+    setLogoBroken(false);
+    setTimetable((prev) =>
+      prev ? { ...prev, branding: nextBranding } : prev
+    );
+  };
 
   const handleLogout = () => {
     logoutAdmin();
@@ -99,8 +139,16 @@ export const StudioShell: React.FC = () => {
             <SundialMark size={24} />
             <span className="studio-wordmark">sundial</span>
             <span className="studio-divider">/</span>
+            {branding?.logo_url && !logoBroken && (
+              <img
+                src={`${branding.logo_url}?v=${logoCacheKey}`}
+                alt=""
+                className="studio-inst-logo"
+                onError={() => setLogoBroken(true)}
+              />
+            )}
             <span className="studio-inst">
-              {timetable?.branding.institution_name || "Registrar Studio"}
+              {branding?.institution_name || "Registrar Studio"}
             </span>
           </div>
 
@@ -209,25 +257,22 @@ export const StudioShell: React.FC = () => {
         )}
 
         {activeTab === "onboarding" && (
-          <section className="studio-placeholder">
-            <Database size={26} strokeWidth={1.5} />
-            <h2>Data onboarding</h2>
-            <p>
-              Upload venues, lecturers, and sessions via CSV or JSON and run
-              pre-flight checks. Scheduled for Sprint 4.
-            </p>
-          </section>
+          <DataOnboarding
+            onProceedToSolver={() => {
+              refreshTimetable();
+              setActiveTab("timetable");
+            }}
+            onDataChanged={refreshTimetable}
+          />
         )}
 
         {activeTab === "settings" && (
-          <section className="studio-placeholder">
-            <Settings size={26} strokeWidth={1.5} />
-            <h2>Institution settings</h2>
-            <p>
-              Configure institution branding, logo, calendar periods, soft
-              rules, and solver weights. Scheduled for Sprint 4.
-            </p>
-          </section>
+          <InstitutionSettings
+            initialPeriods={timetable?.grid_config.periods}
+            logoCacheKey={logoCacheKey}
+            onBrandingUpdated={handleBrandingUpdated}
+            onSchemaUpdated={refreshTimetable}
+          />
         )}
       </main>
     </div>

@@ -10,6 +10,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 
 from src.api.auth import require_admin
+from src.api.chunker import (
+    chunk_weekly_periods,
+    expand_allocation_to_sessions,
+    get_period_duration_minutes,
+    hours_to_weekly_periods,
+)
 from src.api.state import AppStateManager
 
 router = APIRouter(tags=["Data Onboarding & Validation"])
@@ -33,38 +39,38 @@ CSV_TEMPLATES: Dict[str, Tuple[List[str], List[List[str]]]] = {
     ),
     "sessions": (
         [
-            "session_id",
             "module_code",
             "module_name",
             "session_type",
-            "duration_periods",
+            "hours_per_week",
             "cohorts",
             "lecturers",
             "is_evening_stream",
             "preferred_venue",
+            "split_override",
         ],
         [
             [
-                "S0001",
-                "CSU 07101",
-                "Data Structures & Algorithms",
+                "CST 05102",
+                "Computer Networks",
                 "Theory",
-                "2",
-                "L7-1CS;L7-1IT",
-                "Dr. Amina K. Hassan",
+                "3",
+                "L5CS",
+                "Dr. Juma",
                 "false",
-                "Lecture Hall A1",
+                "",
+                "",
             ],
             [
-                "S0002",
-                "CSU 07102",
-                "Database Systems Practical",
+                "CST 05102",
+                "Computer Networks",
                 "Lab",
-                "4",
-                "L7-1CS",
-                "Dr. Amina K. Hassan;Eng. Joseph M. Mollel",
+                "3",
+                "L5CS",
+                "Mr. Bakari",
                 "false",
-                "Computer Lab R42",
+                "Comp R32/33 Lab",
+                "",
             ],
         ],
     ),
@@ -195,70 +201,170 @@ def _parse_lecturers_rows(rows: List[Dict[str, Any]]) -> Tuple[List[Dict[str, An
     return normalized, warnings
 
 
-def _parse_sessions_rows(rows: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
+def _detect_sessions_mode(rows: List[Dict[str, Any]]) -> str:
+    keys: set[str] = set()
+    for r in rows[:5]:
+        keys.update(r.keys())
+    if "hours_per_week" in keys or "hoursPerWeek" in keys:
+        return "allocations_hours"
+    if "weekly_periods" in keys or "weeklyPeriods" in keys:
+        return "allocations_periods"
+    return "legacy_sessions"
+
+
+def _parse_sessions_rows(
+    rows: List[Dict[str, Any]],
+    schema_config: Dict[str, Any] | None = None,
+) -> Tuple[List[Dict[str, Any]], List[str], str, int]:
+    mode = _detect_sessions_mode(rows)
+    period_duration = get_period_duration_minutes(schema_config)
     normalized: List[Dict[str, Any]] = []
     warnings: List[str] = []
+
+    if mode == "legacy_sessions":
+        for idx, row in enumerate(rows, start=1):
+            sid = str(row.get("session_id", row.get("sessionId", ""))).strip()
+            mod_code = str(row.get("module_code", row.get("moduleCode", ""))).strip()
+            if not sid:
+                raise ValueError(f"sessions row {idx}: missing required field 'session_id'.")
+            if not mod_code:
+                raise ValueError(f"sessions row {idx}: missing required field 'module_code'.")
+
+            dur_raw = row.get("duration_periods", row.get("durationPeriods"))
+            if dur_raw is None or str(dur_raw).strip() == "":
+                raise ValueError(f"sessions row {idx}: missing required field 'duration_periods'.")
+            try:
+                dur = int(str(dur_raw).strip())
+                if dur < 1:
+                    raise ValueError("must be >= 1")
+            except ValueError as exc:
+                raise ValueError(
+                    f"sessions row {idx}: invalid duration_periods '{dur_raw}' (must be a positive integer)."
+                ) from exc
+
+            mod_name = str(row.get("module_name", row.get("moduleName", mod_code))).strip() or mod_code
+            stype = str(row.get("session_type", row.get("sessionType", "Theory"))).strip() or "Theory"
+            cohorts = _split_semicolon(row.get("cohorts", row.get("targetCohorts", [])))
+            lecturers = _split_semicolon(row.get("lecturers", []))
+            is_eve = _parse_bool(row.get("is_evening_stream", row.get("isEveningStream", False)))
+            pref_venue = str(row.get("preferred_venue", row.get("preferredVenue", ""))).strip() or None
+            req_cat = _infer_required_category(
+                stype, str(row.get("required_venue_category", row.get("requiredVenueCategory", "")))
+            )
+
+            if not cohorts:
+                warnings.append(f"Session '{sid}' (row {idx}) has no cohorts assigned.")
+            if not lecturers:
+                warnings.append(f"Session '{sid}' (row {idx}) has no lecturers assigned.")
+
+            normalized.append(
+                {
+                    "sessionId": sid,
+                    "moduleCode": mod_code,
+                    "moduleCodes": [mod_code],
+                    "moduleName": mod_name,
+                    "sessionType": stype,
+                    "requiredVenueCategory": req_cat,
+                    "durationPeriods": dur,
+                    "targetCohorts": cohorts,
+                    "cohortRaw": " + ".join(cohorts),
+                    "cohortLevel": str(row.get("cohortLevel", "")),
+                    "lecturers": lecturers,
+                    "isEveningStream": is_eve,
+                    "preferredVenue": pref_venue,
+                    "groundTruth": row.get("groundTruth")
+                    or {
+                        "scheduledDay": "MONDAY",
+                        "startPeriod": 1,
+                        "endPeriod": dur,
+                        "venueId": None,
+                        "venueName": pref_venue or "",
+                    },
+                }
+            )
+        return normalized, warnings, mode, period_duration
+
+    # Course Allocations mode: hours_per_week or weekly_periods -> balanced chunker
     for idx, row in enumerate(rows, start=1):
-        sid = str(row.get("session_id", row.get("sessionId", ""))).strip()
         mod_code = str(row.get("module_code", row.get("moduleCode", ""))).strip()
-        if not sid:
-            raise ValueError(f"sessions row {idx}: missing required field 'session_id'.")
         if not mod_code:
             raise ValueError(f"sessions row {idx}: missing required field 'module_code'.")
 
-        dur_raw = row.get("duration_periods", row.get("durationPeriods"))
-        if dur_raw is None or str(dur_raw).strip() == "":
-            raise ValueError(f"sessions row {idx}: missing required field 'duration_periods'.")
-        try:
-            dur = int(str(dur_raw).strip())
-            if dur < 1:
-                raise ValueError("must be >= 1")
-        except ValueError as exc:
-            raise ValueError(
-                f"sessions row {idx}: invalid duration_periods '{dur_raw}' (must be a positive integer)."
-            ) from exc
-
-        mod_name = str(row.get("module_name", row.get("moduleName", mod_code))).strip()
+        base_id = (
+            str(row.get("session_id", row.get("sessionId", ""))).strip()
+            or f"ALLOC_{idx:03d}"
+        )
+        mod_name = str(row.get("module_name", row.get("moduleName", mod_code))).strip() or mod_code
         stype = str(row.get("session_type", row.get("sessionType", "Theory"))).strip() or "Theory"
         cohorts = _split_semicolon(row.get("cohorts", row.get("targetCohorts", [])))
         lecturers = _split_semicolon(row.get("lecturers", []))
         is_eve = _parse_bool(row.get("is_evening_stream", row.get("isEveningStream", False)))
         pref_venue = str(row.get("preferred_venue", row.get("preferredVenue", ""))).strip() or None
+        split_override = row.get("split_override", row.get("splitOverride"))
         req_cat = _infer_required_category(
             stype, str(row.get("required_venue_category", row.get("requiredVenueCategory", "")))
         )
 
-        if not cohorts:
-            warnings.append(f"Session '{sid}' (row {idx}) has no cohorts assigned.")
-        if not lecturers:
-            warnings.append(f"Session '{sid}' (row {idx}) has no lecturers assigned.")
+        if mode == "allocations_hours":
+            hrs_raw = row.get("hours_per_week", row.get("hoursPerWeek"))
+            if hrs_raw is None or str(hrs_raw).strip() == "":
+                raise ValueError(f"Row {idx} ({mod_code}): missing required field 'hours_per_week'.")
+            try:
+                hrs_val = float(str(hrs_raw).strip())
+            except ValueError as exc:
+                raise ValueError(
+                    f"Row {idx} ({mod_code}): invalid hours_per_week '{hrs_raw}' (must be a positive number)."
+                ) from exc
+            weekly_periods, round_warn = hours_to_weekly_periods(
+                hrs_val,
+                period_duration,
+                row_num=idx,
+                module_code=mod_code,
+            )
+            if round_warn:
+                warnings.append(round_warn)
+        else:
+            wp_raw = row.get("weekly_periods", row.get("weeklyPeriods"))
+            if wp_raw is None or str(wp_raw).strip() == "":
+                raise ValueError(f"Row {idx} ({mod_code}): missing required field 'weekly_periods'.")
+            try:
+                weekly_periods = int(str(wp_raw).strip())
+                if weekly_periods < 1:
+                    raise ValueError("must be >= 1")
+            except ValueError as exc:
+                raise ValueError(
+                    f"Row {idx} ({mod_code}): invalid weekly_periods '{wp_raw}' (must be a positive integer)."
+                ) from exc
 
-        normalized.append(
-            {
-                "sessionId": sid,
-                "moduleCode": mod_code,
-                "moduleCodes": [mod_code],
-                "moduleName": mod_name,
-                "sessionType": stype,
-                "requiredVenueCategory": req_cat,
-                "durationPeriods": dur,
-                "targetCohorts": cohorts,
-                "cohortRaw": " + ".join(cohorts),
-                "cohortLevel": str(row.get("cohortLevel", "")),
-                "lecturers": lecturers,
-                "isEveningStream": is_eve,
-                "preferredVenue": pref_venue,
-                "groundTruth": row.get("groundTruth")
-                or {
-                    "scheduledDay": "MONDAY",
-                    "startPeriod": 1,
-                    "endPeriod": dur,
-                    "venueId": None,
-                    "venueName": pref_venue or "",
-                },
-            }
+        chunks = chunk_weekly_periods(
+            weekly_periods=weekly_periods,
+            session_type=stype,
+            split_override=str(split_override) if split_override is not None else None,
+            row_label=f"Row {idx} ({mod_code})",
         )
-    return normalized, warnings
+
+        if not cohorts:
+            warnings.append(f"Row {idx} ({mod_code}) has no cohorts assigned.")
+        if not lecturers:
+            warnings.append(f"Row {idx} ({mod_code}) has no lecturers assigned.")
+
+        normalized.extend(
+            expand_allocation_to_sessions(
+                base_id=base_id,
+                chunks=chunks,
+                module_code=mod_code,
+                module_name=mod_name,
+                session_type=stype,
+                required_venue_category=req_cat,
+                cohorts=cohorts,
+                lecturers=lecturers,
+                is_evening_stream=is_eve,
+                preferred_venue=pref_venue,
+                cohort_level=str(row.get("cohortLevel", "")),
+            )
+        )
+
+    return normalized, warnings, mode, period_duration
 
 
 def _read_uploaded_records(entity: str, filename: str, raw_bytes: bytes) -> List[Dict[str, Any]]:
@@ -292,15 +398,32 @@ def _read_uploaded_records(entity: str, filename: str, raw_bytes: bytes) -> List
         if not reader.fieldnames:
             raise ValueError(f"CSV file '{filename}' is missing a header row.")
         headers = {h.strip() for h in reader.fieldnames if h}
-        required_cols = set(CSV_TEMPLATES[entity][0])
-        # Allow preferred_venue / department_prefix / department to be omitted as optional columns
-        optional_cols = {"preferred_venue", "department_prefix", "department", "module_name"}
-        missing = sorted((required_cols - optional_cols) - headers)
-        if missing:
-            raise ValueError(
-                f"CSV file '{filename}' is missing required column(s) for '{entity}': {missing}. "
-                f"Found columns: {sorted(headers)}."
+        if entity == "sessions":
+            base_required = {"module_code", "session_type", "cohorts", "lecturers"}
+            has_sizing_col = bool(
+                headers & {"hours_per_week", "weekly_periods", "duration_periods"}
             )
+            missing = sorted(base_required - headers)
+            if not has_sizing_col:
+                missing.append("hours_per_week (or weekly_periods / duration_periods)")
+            if "duration_periods" in headers and "hours_per_week" not in headers and "weekly_periods" not in headers:
+                if "session_id" not in headers:
+                    missing.append("session_id")
+            if missing:
+                raise ValueError(
+                    f"CSV file '{filename}' is missing required column(s) for 'sessions': {missing}. "
+                    f"Found columns: {sorted(headers)}."
+                )
+        else:
+            required_cols = set(CSV_TEMPLATES[entity][0])
+            # Allow optional columns to be omitted
+            optional_cols = {"preferred_venue", "department_prefix", "department", "module_name"}
+            missing = sorted((required_cols - optional_cols) - headers)
+            if missing:
+                raise ValueError(
+                    f"CSV file '{filename}' is missing required column(s) for '{entity}': {missing}. "
+                    f"Found columns: {sorted(headers)}."
+                )
         records = [
             {k.strip(): v for k, v in row.items() if k is not None}
             for row in reader
@@ -381,10 +504,17 @@ async def upload_onboarding_entity(
         raw_records = _read_uploaded_records(entity, filename, raw_bytes)
         if entity == "venues":
             normalized, warnings = _parse_venues_rows(raw_records)
+            session_mode = None
+            period_duration = None
         elif entity == "lecturers":
             normalized, warnings = _parse_lecturers_rows(raw_records)
+            session_mode = None
+            period_duration = None
         else:
-            normalized, warnings = _parse_sessions_rows(raw_records)
+            normalized, warnings, session_mode, period_duration = _parse_sessions_rows(
+                raw_records,
+                schema_config=manager.state.get("schema"),
+            )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -398,7 +528,32 @@ async def upload_onboarding_entity(
         json.dump(normalized, f, indent=2)
         f.write("\n")
 
-    manager.update_entity_data(entity=entity, rows=normalized, filename=filename)
+    extra_meta: Dict[str, Any] | None = None
+    if entity == "sessions":
+        extra_meta = {
+            "mode": session_mode,
+            "period_duration_minutes": period_duration,
+        }
+        if session_mode != "legacy_sessions":
+            extra_meta["input_rows"] = len(raw_records)
+
+    manager.update_entity_data(
+        entity=entity,
+        rows=normalized,
+        filename=filename,
+        extra_meta=extra_meta,
+    )
+
+    if entity == "sessions":
+        return {
+            "entity": "sessions",
+            "mode": session_mode,
+            "input_rows": len(raw_records),
+            "rows_loaded": len(normalized),
+            "period_duration_minutes": period_duration,
+            "warnings": warnings,
+        }
+
     return {
         "entity": entity,
         "rows_loaded": len(normalized),
