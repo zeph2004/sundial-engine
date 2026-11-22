@@ -18,12 +18,22 @@ from src.api.chunker import (
     hours_to_weekly_periods,
 )
 from src.api.main import create_app
-from src.api.state import AppStateManager
+from src.api.state import AppStateManager, validate_schema_config
+
+ATC_CHUNKING_CONFIG = {
+    "min_periods": 2,
+    "by_type": {
+        "Theory": {"preferred": 2, "max": 2},
+        "Tutorial": {"preferred": 1, "max": 2},
+        "Lab": {"preferred": 3, "max": 4},
+        "Workshop": {"preferred": 4, "max": 4},
+    },
+    "default": {"preferred": 2, "max": 3},
+}
 
 
 class TestChunkerUnit(unittest.TestCase):
     def test_period_duration_from_schema_grid(self) -> None:
-        # Period 1 start/end difference takes precedence
         schema_50 = {
             "calendar_grid": {
                 "period_duration_minutes": 45,
@@ -44,22 +54,18 @@ class TestChunkerUnit(unittest.TestCase):
         }
         self.assertEqual(get_period_duration_minutes(schema_60), 60)
 
-        # Fallback to 45 when unavailable
         self.assertEqual(get_period_duration_minutes({}), 45)
         self.assertEqual(get_period_duration_minutes(None), 45)
 
     def test_hours_to_weekly_periods_and_rounding_warnings(self) -> None:
-        # 45-min grid: 3.0h = 4.0 periods exact (no warning)
         wp, warn = hours_to_weekly_periods(3.0, 45, row_num=1, module_code="CST 05102")
         self.assertEqual(wp, 4)
         self.assertIsNone(warn)
 
-        # 60-min grid: 3.0h = 3.0 periods exact (no warning)
         wp60, warn60 = hours_to_weekly_periods(3.0, 60, row_num=2, module_code="CST 05103")
         self.assertEqual(wp60, 3)
         self.assertIsNone(warn60)
 
-        # 50-min grid: 2.0h = 2.4 periods -> rounded to 2 with non-blocking warning
         wp50, warn50 = hours_to_weekly_periods(2.0, 50, row_num=4, module_code="CST 05102")
         self.assertEqual(wp50, 2)
         self.assertIsNotNone(warn50)
@@ -68,51 +74,101 @@ class TestChunkerUnit(unittest.TestCase):
         self.assertIn("50-min grid", warn50 or "")
         self.assertIn("2.4 periods", warn50 or "")
 
-        # Non-positive hours raises ValueError
         with self.assertRaises(ValueError):
             hours_to_weekly_periods(0, 45, row_num=1, module_code="BAD 101")
 
-    def test_balanced_splitting_theory_and_lab_1_to_8(self) -> None:
-        expected_theory = {
-            1: [1],
-            2: [2],
-            3: [2, 1],
-            4: [2, 2],
-            5: [3, 2],
-            6: [2, 2, 2],
-            7: [3, 2, 2],
-            8: [2, 2, 2, 2],
-        }
-        expected_lab = {
-            1: [1],
-            2: [2],
-            3: [3],
-            4: [2, 2],
-            5: [3, 2],
-            6: [3, 3],
-            7: [3, 2, 2],
-            8: [3, 3, 2],
-        }
-        for n in range(1, 9):
-            self.assertEqual(chunk_weekly_periods(n, "Theory"), expected_theory[n], f"Theory {n}")
-            self.assertEqual(chunk_weekly_periods(n, "Lab"), expected_lab[n], f"Lab {n}")
-            self.assertEqual(chunk_weekly_periods(n, "Workshop"), expected_lab[n], f"Workshop {n}")
-            self.assertEqual(chunk_weekly_periods(n, "Practical"), expected_lab[n], f"Practical {n}")
+    def test_atc_default_config_driven_splitting(self) -> None:
+        # Theory: {preferred: 2, max: 2}
+        self.assertEqual(chunk_weekly_periods(4, "Theory", chunking_config=ATC_CHUNKING_CONFIG), [2, 2])
+        self.assertEqual(chunk_weekly_periods(6, "Theory", chunking_config=ATC_CHUNKING_CONFIG), [2, 2, 2])
+        self.assertEqual(chunk_weekly_periods(3, "theory", chunking_config=ATC_CHUNKING_CONFIG), [2, 1])
 
-    def test_split_override_parsing_and_validation(self) -> None:
-        self.assertEqual(chunk_weekly_periods(6, "Theory", split_override="3+3"), [3, 3])
-        self.assertEqual(chunk_weekly_periods(6, "Lab", split_override="2,2,2"), [2, 2, 2])
-        self.assertEqual(chunk_weekly_periods(4, "Lab", split_override="4"), [4])
+        # Lab: {preferred: 3, max: 4}
+        self.assertEqual(chunk_weekly_periods(3, "Lab", chunking_config=ATC_CHUNKING_CONFIG), [3])
+        self.assertEqual(chunk_weekly_periods(4, "Lab", chunking_config=ATC_CHUNKING_CONFIG), [4])
+        self.assertEqual(chunk_weekly_periods(6, "Lab", chunking_config=ATC_CHUNKING_CONFIG), [3, 3])
+        self.assertEqual(chunk_weekly_periods(7, "Lab", chunking_config=ATC_CHUNKING_CONFIG), [4, 3])
 
-        # Sum mismatch raises ValueError with row details
+        # Workshop: {preferred: 4, max: 4}
+        self.assertEqual(chunk_weekly_periods(4, "Workshop", chunking_config=ATC_CHUNKING_CONFIG), [4])
+        self.assertEqual(chunk_weekly_periods(8, "Workshop", chunking_config=ATC_CHUNKING_CONFIG), [4, 4])
+
+        # Tutorial: {preferred: 1, max: 2}
+        self.assertIn(
+            chunk_weekly_periods(2, "Tutorial", chunking_config=ATC_CHUNKING_CONFIG),
+            ([1, 1], [2]),
+        )
+
+    def test_custom_60min_university_config_and_unknown_type_fallback(self) -> None:
+        uni_60_cfg = {
+            "min_periods": 2,
+            "by_type": {
+                "Theory": {"preferred": 1, "max": 2},
+                "Lab": {"preferred": 3, "max": 3},
+            },
+            "default": {"preferred": 2, "max": 3},
+        }
+        # Theory: {preferred: 1, max: 2}
+        self.assertEqual(chunk_weekly_periods(1, "Theory", chunking_config=uni_60_cfg), [1])
+        self.assertEqual(chunk_weekly_periods(2, "Theory", chunking_config=uni_60_cfg), [1, 1])
+        self.assertEqual(chunk_weekly_periods(3, "Theory", chunking_config=uni_60_cfg), [1, 1, 1])
+
+        # Lab: {preferred: 3, max: 3} -> 7p borrows 1 to balance [3, 2, 2]
+        self.assertEqual(chunk_weekly_periods(3, "Lab", chunking_config=uni_60_cfg), [3])
+        self.assertEqual(chunk_weekly_periods(6, "Lab", chunking_config=uni_60_cfg), [3, 3])
+        self.assertEqual(chunk_weekly_periods(7, "Lab", chunking_config=uni_60_cfg), [3, 2, 2])
+
+        # Unknown / custom session type falls back cleanly to default {preferred: 2, max: 3}
+        self.assertEqual(chunk_weekly_periods(3, "Clinical", chunking_config=uni_60_cfg), [3])
+        self.assertEqual(chunk_weekly_periods(4, "Seminar", chunking_config=uni_60_cfg), [2, 2])
+        self.assertEqual(chunk_weekly_periods(5, "Studio", chunking_config=uni_60_cfg), [3, 2])
+        self.assertEqual(chunk_weekly_periods(7, "Studio", chunking_config=uni_60_cfg), [3, 2, 2])
+
+    def test_split_override_overrides_chunking_config(self) -> None:
+        self.assertEqual(
+            chunk_weekly_periods(6, "Theory", split_override="3+3", chunking_config=ATC_CHUNKING_CONFIG),
+            [3, 3],
+        )
+        self.assertEqual(
+            chunk_weekly_periods(6, "Lab", split_override="2,2,2", chunking_config=ATC_CHUNKING_CONFIG),
+            [2, 2, 2],
+        )
+        self.assertEqual(
+            chunk_weekly_periods(4, "Theory", split_override="4", chunking_config=ATC_CHUNKING_CONFIG),
+            [4],
+        )
+
         with self.assertRaises(ValueError) as ctx:
-            chunk_weekly_periods(4, "Theory", split_override="3+2", row_label="Row 2 (CS101)")
+            chunk_weekly_periods(
+                4,
+                "Theory",
+                split_override="3+2",
+                row_label="Row 2 (CS101)",
+                chunking_config=ATC_CHUNKING_CONFIG,
+            )
         self.assertIn("Row 2 (CS101)", str(ctx.exception))
         self.assertIn("sums to 5", str(ctx.exception))
 
-        # Non-integer token raises ValueError
         with self.assertRaises(ValueError):
-            chunk_weekly_periods(4, "Theory", split_override="2+abc")
+            chunk_weekly_periods(4, "Theory", split_override="2+abc", chunking_config=ATC_CHUNKING_CONFIG)
+
+    def test_schema_validation_rejects_invalid_session_chunking(self) -> None:
+        bad_schema = {
+            "calendar_grid": {"active_days": ["MONDAY"], "periods_per_day": 12, "breaks_after_periods": []},
+            "streams": {
+                "full_time": {"min_period": 1, "max_period": 12, "supported_durations": [1, 2]},
+                "evening": {"min_period": 13, "max_period": 18, "supported_durations": [1, 2]},
+            },
+            "venue_rules": {"compatibility_map": {"Theory / Lecture Room": {"primary": ["Theory / Lecture Room"], "fallback": []}}},
+            "session_chunking": {
+                "min_periods": 0,
+                "by_type": {"Lab": {"preferred": 4, "max": 2}},
+                "default": {"preferred": 2, "max": 3},
+            },
+        }
+        errs = validate_schema_config(bad_schema)
+        self.assertTrue(any("min_periods" in e for e in errs), errs)
+        self.assertTrue(any("by_type.Lab.max" in e for e in errs), errs)
 
     def test_deterministic_expansion(self) -> None:
         sessions = expand_allocation_to_sessions(
@@ -144,18 +200,17 @@ class TestOnboardingChunkerAndTheoryOnlyAPI(unittest.TestCase):
         headers = {"Authorization": f"Bearer {token}"}
         return TestClient(app), headers
 
-    def test_template_download_and_upload_expands_2_rows_to_4_sessions(self) -> None:
+    def test_template_download_and_upload_uses_schema_session_chunking(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             client, headers = self._make_client(tmpdir)
 
-            # 1. Download updated Course Allocations CSV template
             tpl_res = client.get("/api/onboarding/templates/sessions", headers=headers)
             self.assertEqual(tpl_res.status_code, 200)
             csv_bytes = tpl_res.content
             self.assertIn(b"hours_per_week", csv_bytes)
             self.assertIn(b"split_override", csv_bytes)
 
-            # 2. Upload the downloaded template directly
+            # On ATC defaults: Theory 3h=4p -> [2, 2] (2 sessions), Lab 3h=4p -> [4] (1 session) => 3 sessions
             up_res = client.post(
                 "/api/onboarding/upload/sessions",
                 headers=headers,
@@ -166,22 +221,20 @@ class TestOnboardingChunkerAndTheoryOnlyAPI(unittest.TestCase):
             self.assertEqual(body["entity"], "sessions")
             self.assertEqual(body["mode"], "allocations_hours")
             self.assertEqual(body["input_rows"], 2)
-            self.assertEqual(body["rows_loaded"], 4)
+            self.assertEqual(body["rows_loaded"], 3)
             self.assertEqual(body["period_duration_minutes"], 45)
             self.assertEqual(body["warnings"], [])
 
-            # 3. Verify onboarding status persists both input_rows and row_count
             status_res = client.get("/api/onboarding/status", headers=headers)
             self.assertEqual(status_res.status_code, 200)
             s_meta = status_res.json()["entities"]["sessions"]
             self.assertEqual(s_meta["input_rows"], 2)
-            self.assertEqual(s_meta["row_count"], 4)
+            self.assertEqual(s_meta["row_count"], 3)
 
     def test_weekly_periods_and_legacy_duration_periods_modes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             client, headers = self._make_client(tmpdir)
 
-            # Mode 2: weekly_periods
             wp_csv = (
                 "module_code,module_name,session_type,weekly_periods,cohorts,lecturers,is_evening_stream,preferred_venue,split_override\n"
                 "CS 101,Algorithms,Theory,6,C1,Dr. A,false,,\n"
@@ -196,7 +249,6 @@ class TestOnboardingChunkerAndTheoryOnlyAPI(unittest.TestCase):
             self.assertEqual(res_wp.json()["input_rows"], 1)
             self.assertEqual(res_wp.json()["rows_loaded"], 3)  # 6 Theory -> [2, 2, 2]
 
-            # Mode 3: legacy duration_periods
             legacy_csv = (
                 "session_id,module_code,module_name,session_type,duration_periods,cohorts,lecturers,is_evening_stream,preferred_venue\n"
                 "S0001,CS 101,Algorithms,Theory,2,C1,Dr. A,false,\n"
@@ -214,7 +266,6 @@ class TestOnboardingChunkerAndTheoryOnlyAPI(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             client, headers = self._make_client(tmpdir)
 
-            # Upload ONLY Theory / Lecture Room venues (no Labs or Workshops)
             venues_csv = (
                 "venue_id,name,capacity,venue_type,department_prefix\n"
                 "101,Lecture Hall A,120,Theory / Lecture Room,GEN\n"
@@ -254,10 +305,8 @@ class TestOnboardingChunkerAndTheoryOnlyAPI(unittest.TestCase):
                 files={"file": ("sessions.csv", sessions_csv, "text/csv")},
             )
             self.assertEqual(up_sess.status_code, 200, up_sess.text)
-            # 3h->4p ([2,2]), 3h->4p ([2,2]), 1.5h->2p ([2]) = 5 sessions
             self.assertEqual(up_sess.json()["rows_loaded"], 5)
 
-            # Pre-flight validation must PASS with 0 errors and 0 lab/workshop warnings
             val_res = client.post("/api/onboarding/validate", headers=headers)
             self.assertEqual(val_res.status_code, 200)
             val_body = val_res.json()
@@ -265,7 +314,6 @@ class TestOnboardingChunkerAndTheoryOnlyAPI(unittest.TestCase):
             self.assertEqual(val_body["errors"], [])
             self.assertEqual(val_body["warnings"], [])
 
-            # Solve must succeed with 0 hard violations
             solve_res = client.post(
                 "/api/solve",
                 headers=headers,

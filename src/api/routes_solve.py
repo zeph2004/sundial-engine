@@ -248,6 +248,7 @@ def solve_active_timetable(
         + verification["lecturer_overlaps"]
         + verification["cohort_overlaps"]
         + verification["venue_double_bookings"]
+        + verification.get("venue_hopping_violations", 0)
     )
 
     # 5. Condition 1 Saturday Overflow Explanations

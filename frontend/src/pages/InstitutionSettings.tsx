@@ -190,6 +190,20 @@ export const InstitutionSettings: React.FC<InstitutionSettingsProps> = ({
   const [twilightMin, setTwilightMin] = useState<number>(11);
   const [twilightMax, setTwilightMax] = useState<number>(12);
 
+  // Session Block Sizing (Auto-Chunker) state
+  const [chunkMinPeriods, setChunkMinPeriods] = useState<number>(2);
+  const [chunkDefaultPref, setChunkDefaultPref] = useState<number>(2);
+  const [chunkDefaultMax, setChunkDefaultMax] = useState<number>(3);
+  const [chunkTypeRows, setChunkTypeRows] = useState<
+    Array<{ id: number; type: string; preferred: number; max: number }>
+  >([
+    { id: 1, type: "Theory", preferred: 2, max: 2 },
+    { id: 2, type: "Tutorial", preferred: 1, max: 2 },
+    { id: 3, type: "Lab", preferred: 3, max: 4 },
+    { id: 4, type: "Workshop", preferred: 4, max: 4 },
+  ]);
+  const nextChunkRowId = useRef(10);
+
   // Schema save / reset feedback
   const [savingSchema, setSavingSchema] = useState(false);
   const [resettingSchema, setResettingSchema] = useState(false);
@@ -225,6 +239,28 @@ export const InstitutionSettings: React.FC<InstitutionSettingsProps> = ({
     setTwilightEnabled(twi?.enabled ?? true);
     setTwilightMin(twi?.buffer_min_period ?? 11);
     setTwilightMax(twi?.buffer_max_period ?? 12);
+
+    const sc = schema.session_chunking;
+    setChunkMinPeriods(sc?.min_periods ?? 2);
+    setChunkDefaultPref(sc?.default?.preferred ?? 2);
+    setChunkDefaultMax(sc?.default?.max ?? 3);
+    const entries = Object.entries(
+      sc?.by_type || {
+        Theory: { preferred: 2, max: 2 },
+        Tutorial: { preferred: 1, max: 2 },
+        Lab: { preferred: 3, max: 4 },
+        Workshop: { preferred: 4, max: 4 },
+      }
+    );
+    setChunkTypeRows(
+      entries.map(([type, rule], idx) => ({
+        id: idx + 1,
+        type,
+        preferred: rule.preferred ?? 2,
+        max: rule.max ?? 3,
+      }))
+    );
+    nextChunkRowId.current = entries.length + 10;
   };
 
   useEffect(() => {
@@ -464,6 +500,31 @@ export const InstitutionSettings: React.FC<InstitutionSettingsProps> = ({
         "Twilight buffer start period must be >= 1 and <= end period."
       );
     }
+    if (chunkMinPeriods < 1) {
+      clientErrors.push("Session chunking minimum block size must be >= 1.");
+    }
+    if (chunkDefaultPref < 1 || chunkDefaultMax < chunkDefaultPref) {
+      clientErrors.push(
+        "Session chunking fallback default max must be >= preferred (>= 1)."
+      );
+    }
+    const byTypeMap: Record<string, { preferred: number; max: number }> = {};
+    for (const row of chunkTypeRows) {
+      const label = row.type.trim();
+      if (!label) {
+        clientErrors.push("Every session block sizing row must have a session type name.");
+        break;
+      }
+      if (row.preferred < 1 || row.max < row.preferred) {
+        clientErrors.push(
+          `Session type '${label}': max periods (${row.max}) must be >= preferred (${row.preferred}).`
+        );
+      }
+      byTypeMap[label] = {
+        preferred: row.preferred,
+        max: row.max,
+      };
+    }
 
     if (clientErrors.length > 0) {
       setSchemaErrors(clientErrors);
@@ -529,6 +590,14 @@ export const InstitutionSettings: React.FC<InstitutionSettingsProps> = ({
             buffer_min_period: twilightMin,
             buffer_max_period: twilightMax,
           },
+        },
+      },
+      session_chunking: {
+        min_periods: chunkMinPeriods,
+        by_type: byTypeMap,
+        default: {
+          preferred: chunkDefaultPref,
+          max: chunkDefaultMax,
         },
       },
     };
@@ -974,6 +1043,188 @@ export const InstitutionSettings: React.FC<InstitutionSettingsProps> = ({
                   </label>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Session Block Sizing (Auto-Chunker) */}
+          <div className="schema-subsection">
+            <div className="subsection-head-row">
+              <div>
+                <h4 className="subsection-title" style={{ marginBottom: 2 }}>
+                  Session block sizing (Auto-Chunker)
+                </h4>
+                <p className="field-hint" style={{ margin: 0 }}>
+                  Controls how weekly hours uploaded in Data Onboarding are
+                  split into teaching blocks per session type.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setSchemaSuccess(null);
+                  setChunkTypeRows((prev) => [
+                    ...prev,
+                    {
+                      id: nextChunkRowId.current++,
+                      type: "",
+                      preferred: chunkDefaultPref,
+                      max: chunkDefaultMax,
+                    },
+                  ]);
+                }}
+              >
+                <Plus size={15} />
+                <span>Add session type</span>
+              </button>
+            </div>
+
+            <div className="stream-bounds-grid">
+              <div className="stream-box">
+                <div className="stream-box-title">Minimum block size</div>
+                <label className="field-label">
+                  Min periods
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    className="field-input mono-num"
+                    value={chunkMinPeriods}
+                    onChange={(e) => {
+                      setSchemaSuccess(null);
+                      setChunkMinPeriods(Math.max(1, Number(e.target.value) || 1));
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="stream-box" style={{ gridColumn: "span 2" }}>
+                <div className="stream-box-title">
+                  Fallback default (unlisted session types)
+                </div>
+                <div className="stream-pair">
+                  <label className="field-label">
+                    Preferred periods
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      className="field-input mono-num"
+                      value={chunkDefaultPref}
+                      onChange={(e) => {
+                        setSchemaSuccess(null);
+                        setChunkDefaultPref(Math.max(1, Number(e.target.value) || 1));
+                      }}
+                    />
+                  </label>
+                  <label className="field-label">
+                    Max periods
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      className="field-input mono-num"
+                      value={chunkDefaultMax}
+                      onChange={(e) => {
+                        setSchemaSuccess(null);
+                        setChunkDefaultMax(Math.max(1, Number(e.target.value) || 1));
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Session type</th>
+                    <th style={{ width: 160 }}>Preferred periods</th>
+                    <th style={{ width: 160 }}>Max periods</th>
+                    <th style={{ width: 70, textAlign: "right" }}>Remove</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {chunkTypeRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <input
+                          type="text"
+                          className="table-input"
+                          style={{ width: "100%", maxWidth: 260 }}
+                          placeholder="e.g. Studio, Seminar, Clinical"
+                          value={row.type}
+                          onChange={(e) => {
+                            setSchemaSuccess(null);
+                            const val = e.target.value;
+                            setChunkTypeRows((prev) =>
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, type: val } : r
+                              )
+                            );
+                          }}
+                          aria-label="Session type name"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min={1}
+                          max={12}
+                          className="table-input mono-num"
+                          value={row.preferred}
+                          onChange={(e) => {
+                            setSchemaSuccess(null);
+                            const val = Math.max(1, Number(e.target.value) || 1);
+                            setChunkTypeRows((prev) =>
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, preferred: val } : r
+                              )
+                            );
+                          }}
+                          aria-label={`${row.type || "Session type"} preferred periods`}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min={1}
+                          max={12}
+                          className="table-input mono-num"
+                          value={row.max}
+                          onChange={(e) => {
+                            setSchemaSuccess(null);
+                            const val = Math.max(1, Number(e.target.value) || 1);
+                            setChunkTypeRows((prev) =>
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, max: val } : r
+                              )
+                            );
+                          }}
+                          aria-label={`${row.type || "Session type"} max periods`}
+                        />
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={`Remove ${row.type || "row"}`}
+                          aria-label={`Remove ${row.type || "row"}`}
+                          onClick={() => {
+                            setSchemaSuccess(null);
+                            setChunkTypeRows((prev) =>
+                              prev.filter((r) => r.id !== row.id)
+                            );
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 

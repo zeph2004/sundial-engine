@@ -12,7 +12,7 @@
                       ─────────███ ░░░░░░░░░░ ║ ░░░░░░░░░░ ███─────────                      
                                  ╲   ░░░░░░░░ ║ ░░░░░░░░   ╱                                 
                                   `─.  ░░░░░░ ▼ ░░░░░░  `─.                                  
-                                .─'  ██  ░░░░░░░░░░░  ██  `─.                                
+                                .─'  ██  ░░░░░░░░░░░  ██  .─'                                
                               .'     / `─.  ░░░░░  .─' \     `.                              
                                     /     `─█████─'     \                                    
                                    /          |          \                                   
@@ -21,38 +21,46 @@
 
 </div>
 
-# Sundial Engine
+# Sundial Engine (v1.0)
 
 **Sundial Engine** is an institution-agnostic **University Course Timetabling CSP & Optimization Engine** written in pure Python 3 (zero external solver dependencies in `src/csp/`), packaged as a self-hosted web application (**FastAPI** backend + **React / Vite** frontend).
 
-Every institutional rule—calendar grid, breaks, Full-Time/Evening streams, venue compatibility, departmental affinity pools, soft-constraint weights, and optimizer parameters—lives declaratively in JSON (`configs/institution_schema.json`).
+Every institutional rule—calendar grid, breaks, Full-Time/Evening streams, venue compatibility, departmental affinity pools, soft-constraint weights, and optimiser parameters—lives declaratively in JSON (`configs/institution_schema.json`).
 
-### 2-Stage Solving Pipeline
+---
 
-1. **Phase 3 — Exact CSP Solver (`src/csp/solver.py`):**
-   - Encodes the `6 days × 18 periods` (`108`-slot) weekly grid into a single Python integer bitmask for $O(1)$ overlap and venue-availability checks.
-   - Uses weekday-aware MRV + conflict-graph degree + block-duration ordering, 3-tier departmental venue affinity (with hard lab/workshop sub-pool locking), a strict 2-condition Saturday fallback (Mon–Fri default), and reversible eager forward checking (`undo_log`, zero `deepcopy`).
-   - Supports pre-solve **session pinning** (`pinned_assignments`) with unary/pairwise 108-bit validation before search begins.
-2. **Phase 4 — Pluggable Soft-Constraint Optimizer (`src/csp/optimizer.py`):**
-   - Declarative JSON-configured `@register_soft_constraint` registry supporting 7 built-in rules (`minimize_saturday_theory`, `minimize_saturday_overflow`, `prefer_shared_practicals_on_saturday`, `minimize_evening_twilight`, `minimize_cohort_idle_gaps`, `balance_weekly_workload`, `prefer_exact_module_venue`) plus custom runtime rules.
-   - Runs hard-constraint-preserving **Simulated Annealing** (`40,000` iterations) with $O(1)$ incremental $\Delta E$ scoring across guided single-session relocates and compatible pairwise swaps, strictly honoring `pinned_session_ids`.
+## Key Features (v1.0)
+
+- **2-Stage Solving Pipeline (`src/csp/` — 100% pure Python stdlib):**
+  1. **Phase 3 — Exact CSP Solver (`solver.py`):** Encodes the `6 days × 18 periods` (`108`-slot) weekly grid into a Python integer bitmask for $O(1)$ overlap checks. Uses weekday-aware MRV + conflict-graph degree + block-duration ordering, 3-tier departmental venue affinity (with hard lab/workshop sub-pool locking), a strict 2-condition Saturday fallback (Mon–Fri default), and reversible eager forward checking (`undo_log`, zero `deepcopy`).
+  2. **Phase 4 — Pluggable Soft-Constraint Optimiser (`optimizer.py`):** Declarative JSON-configured `@register_soft_constraint` registry with 7 built-in rules plus custom runtime rules, optimised via hard-constraint-preserving **Simulated Annealing** (`40,000` iterations) with $O(1)$ incremental $\Delta E$ scoring.
+- **Course Allocations (`hours_per_week`) & Auto-Chunker (`src/api/chunker.py`):** Registrars can upload weekly course hours (`hours_per_week`), `weekly_periods`, or legacy pre-split `duration_periods`. Sundial automatically converts hours using the institution's period duration and splits them into balanced teaching blocks (with optional `split_override` such as `3+3` and non-blocking rounding notices).
+- **Theory-Only Institution Support:** Pre-flight validation and solving cleanly handle institutions with zero Lab/Workshop venues or sessions.
+- **Registrar Solver Studio (`/studio`):**
+  - **Interactive Session Pinning:** Click any timetable block to lock/unlock it in its exact `(day, start_period, venue_id)` slot across both Phase 3 and Phase 4, with instant 108-bit clash validation and one-click *Clear all pins*.
+  - **Docked Soft-Constraint Drawer:** Toggle rules on/off, adjust priorities via a 10-tier weight scale, edit rule parameters, or switch to **Advanced (JSON)** mode with live syntax validation and reset-to-defaults.
+  - **Scorecard & Saturday Transparency Modal:** Displays Before (Phase 3) vs. After (Phase 4) penalty breakdowns and Condition 1/2 explanations for every cohort with Saturday sessions.
+- **Noticeboard A4 Landscape PDF Exports (`src/api/pdf_export.py`):**
+  - **Public Single PDF (`/`):** One-tap A4 Landscape download for any Cohort, Lecturer, or Venue with official branding, dedicated shaded **TEA** and **LUNCH** break columns, lecturer names in every cell, and `Page X of Y` footers.
+  - **Master Bulk PDF (`/studio`):** Protected multi-page noticeboard export for *All Cohorts*, *All Lecturers*, or *All Venues*.
 
 ---
 
 ## Verified Benchmarks (ATC Dataset)
 
-Evaluated on the **Arusha Technical College (ATC)** master timetable (`75` venues, `175` lecturers, `121` active cohorts, `18` periods/day):
+Evaluated on the **Arusha Technical College (ATC)** master timetable (`75` venues, `175` lecturers, `121` active cohorts, `18` periods/day). See **[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)** for the full breakdown including Phase 3 vs. Phase 4 comparisons and API/PDF latency.
 
-| Metric | Mode A: Clean Primary (`1,233` sessions) | Mode B: Full Stress-Test (`1,299` sessions) | Raw ATC Ground Truth (`1,299` sessions) |
+| Metric | Mode A: Clean Primary (`1,233` sessions) | Mode B: Full Master (`1,299` sessions) | Raw ATC Ground Truth (`1,299` sessions) |
 | :--- | :---: | :---: | :---: |
-| **Phase 3 CSP Solve Time** | `0.99 s` (`992.54 ms`) | `1.05 s` (`1,051.79 ms`) | Human-authored |
-| **Phase 4 SA Optimization (`40,000` iter)** | `0.62 s` (`620.94 ms`) | `0.49 s` (`490.67 ms`) | — |
+| **Phase 3 CSP Solve Time** | `916.2 ms` | `1,064.5 ms` | Human-authored |
+| **Phase 4 SA Optimization (`40,000` iter)** | `446.0 ms` (`1.36 s` total) | `451.3 ms` (`1.52 s` total) | — |
 | **Backtracks** | **`0`** | **`0`** | — |
-| **Hard Constraint Violations** | **`0`** (`0` Lec / `0` Coh / `0` Ven) | **`0`** (`0` Lec / `0` Coh / `0` Ven) | `81` conflicting pairs |
-| **Soft-Objective Reduction (SA)** | **`-41.16%`** (`37,877.5` $\to$ `22,287.5`) | **`-29.42%`** (`45,143.8` $\to$ `31,862.5`) | — |
-| **100% Saturday-Free Cohorts** | **`111 / 121` (`91.7%`)** | **`107 / 121` (`88.4%`)** | `86 / 121` (`71.1%`) |
-| **Tier-1 Departmental Venue Affinity** | **`1,230 / 1,233` (`99.8%`)** | **`1,296 / 1,299` (`99.8%`)** | — |
-| **Specialized Lab/Workshop Dept Lock** | **`306 / 306` (`100.0%`)** | **`323 / 323` (`100.0%`)** | `100.0%` |
+| **Hard Constraint Violations** | **`0`** (`0` Lec / `0` Coh / `0` Ven) | **`0`** (`0` Lec / `0` Coh / `0` Ven) | `224` (`71` Lec / `71` Coh / `77` Ven / `5` Unary) |
+| **Soft-Objective Reduction (SA)** | **`-41.2%`** (`37,877.5` $\to$ `22,287.5`) | **`-29.4%`** (`45,143.8` $\to$ `31,862.5`) | — |
+| **100% Saturday-Free Cohorts (Phase 3 / Phase 4)** | **`111 / 121` (`91.7%`)** / `108 / 121` (`89.3%`) | **`107 / 121` (`88.4%`)** / `100 / 121` (`82.6%`) | `86 / 121` (`71.1%`) |
+| **Saturday Theory Sessions (Phase 4)** | **`2`** *(down from 17)* | **`9`** *(down from 23)* | `17` |
+| **Tier-1 Departmental Venue Affinity** | **`99.8%`** *(Tier 1A exact: `84.9%`)* | **`99.8%`** *(Tier 1A exact: `82.5%`)* | `100.0%` |
+| **Noticeboard PDF Export** | `33.0 ms` (single) / `2.24 s` (121-page master) | — | — |
 
 ---
 
@@ -64,9 +72,10 @@ sundial-engine/
 │   ├── institution_schema.json      # Calendar grid, streams, venue rules, soft constraints & SA config
 │   └── atc_venue_affinity.json      # 3-tier departmental venue affinity & hard lab sub-pools
 ├── data/
-│   ├── raw/atc/                     # Raw ATC benchmark JSON datasets
-│   ├── uploads/                     # Uploaded logos & normalized custom CSV/JSON entities
-│   └── processed/                   # Persisted app_state.json & exported timetable_view_data.json
+│   ├── raw/atc/                     # Raw ATC benchmark JSON datasets (used for first-boot preload)
+│   └── processed/                   # Runtime app_state.json (gitignored) & view data bundle
+├── docs/
+│   └── BENCHMARKS.md                # Full Mode A / Mode B & API/PDF benchmark report
 ├── src/
 │   ├── csp/                         # 100% pure Python 3 stdlib engine (zero external deps)
 │   │   ├── domain.py                # Declarative domain builder & pigeonhole pre-flight checks
@@ -78,22 +87,28 @@ sundial-engine/
 │   │   ├── main.py                  # App factory, CORS, auth/pin routes & router mounting
 │   │   ├── auth.py                  # Stateless HMAC-SHA256 single-admin bearer auth (24h expiry)
 │   │   ├── state.py                 # Thread-safe persistent workspace manager (app_state.json)
+│   │   ├── chunker.py               # hours_per_week -> balanced session auto-chunker
+│   │   ├── pdf_export.py            # ReportLab A4 Landscape university noticeboard PDF renderer
 │   │   ├── routes_settings.py       # Branding, logo upload & schema configuration routes
 │   │   ├── routes_onboarding.py     # Independent CSV/JSON upload, templates & row validation
 │   │   ├── routes_solve.py          # Phase 3 + Phase 4 solve endpoint & Saturday explanations
+│   │   ├── routes_export.py         # Public single PDF & protected Master Bulk PDF routes
 │   │   └── routes_public.py         # Public unauthenticated timetable consumer endpoint
-│   └── viz/                         # Standalone static HTML/PDF timetable exporter & viewer
+│   └── viz/                         # Standalone static HTML timetable exporter & viewer
 ├── frontend/                        # React + TypeScript + Vite web application
 │   ├── vite.config.ts               # Dev proxy (/api -> http://localhost:8000)
 │   └── src/
-│       ├── api/client.ts            # Typed fetch wrapper with Bearer token handling
-│       ├── components/              # TimetableGrid, SearchableSelect, SundialMark
-│       └── pages/                   # PublicLookup (/), AdminLogin (/login), StudioShell (/studio)
+│       ├── api/client.ts            # Typed fetch wrapper with Bearer token & PDF download helpers
+│       ├── components/              # TimetableGrid, SearchableSelect, ConstraintDrawer, SolveDetailsModal, SundialMark, CardioidBackdrop
+│       └── pages/                   # PublicLookup (/), AdminLogin (/login), StudioShell (/studio), SolverStudio, DataOnboarding, InstitutionSettings
 ├── scripts/
 │   └── verify_sprint2.py            # Live HTTP end-to-end API smoke test suite
 └── tests/
+    ├── test_chunker.py              # Course allocation auto-chunker & Theory-only API tests
     ├── test_optimizer.py            # Phase 4 soft-constraint & SA unit tests
-    └── test_pinning_and_api.py      # Session pinning, auth, state & API unit tests
+    ├── test_pdf_export.py           # Public single PDF & protected Master Bulk PDF tests
+    ├── test_pinning_and_api.py      # Session pinning, auth, state & API unit tests
+    └── test_solver_invariants.py    # Mode A/B 0-backtrack, delta parity & pinning invariant tests
 ```
 
 ---
@@ -102,13 +117,15 @@ sundial-engine/
 
 Interactive OpenAPI / Swagger UI documentation is available when the backend is running at **`http://localhost:8000/docs`** (ReDoc at `http://localhost:8000/redoc`).
 
-### Health & Public Consumer
+### Health, Public Consumer & PDF Exports
 
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/health` | Public | Returns server status, active dataset mode, session count, and pin count. |
 | `GET` | `/api/public/timetable` | Public | Returns branding, grid config, sorted `entities` (`cohorts`, `lecturers`, `venues`), and scheduled `sessions`. |
 | `GET` | `/api/public/logo` | Public | Serves the uploaded institution logo image (`404` if none uploaded). |
+| `GET` | `/api/public/export/pdf` | Public | Downloads a single-page A4 Landscape noticeboard PDF (`?lens=cohort\|lecturer\|venue&id=<id>`). |
+| `GET` | `/api/export/master-pdf` | Admin Bearer | Downloads a multi-page A4 Landscape Master PDF for all entities (`?lens=cohort\|lecturer\|venue`). |
 
 ### Authentication
 
@@ -131,10 +148,10 @@ Interactive OpenAPI / Swagger UI documentation is available when the backend is 
 
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/onboarding/status` | Admin Bearer | Returns filename, row count, timestamp, and source (`preloaded_atc` vs `custom_upload`) per entity. |
-| `GET` | `/api/onboarding/templates/{entity}` | Admin Bearer | Downloads a CSV template (`venues`, `lecturers`, or `sessions`) with exact headers and 2 sample rows. |
-| `POST` | `/api/onboarding/upload/{entity}` | Admin Bearer | Uploads and normalizes a `.csv` or `.json` file for one entity without overwriting other entities. |
-| `POST` | `/api/onboarding/validate` | Admin Bearer | Runs pigeonhole pre-flight and referential integrity checks, returning row-level `errors` and `warnings`. |
+| `GET` | `/api/onboarding/status` | Admin Bearer | Returns filename, row count (`row_count` + `input_rows` if expanded), timestamp, and source per entity. |
+| `GET` | `/api/onboarding/templates/{entity}` | Admin Bearer | Downloads a CSV template (`venues`, `lecturers`, or `sessions` in Course Allocations `hours_per_week` format). |
+| `POST` | `/api/onboarding/upload/{entity}` | Admin Bearer | Uploads a `.csv` or `.json` file independently. Auto-detects `hours_per_week`, `weekly_periods`, or legacy `duration_periods` for `sessions`. |
+| `POST` | `/api/onboarding/validate` | Admin Bearer | Runs pigeonhole pre-flight and referential integrity checks (Theory-only safe), returning row-level `errors` and `warnings`. |
 
 ### Solver & Session Pinning
 
@@ -182,20 +199,20 @@ npm install
 npm run dev
 ```
 
-The frontend runs on **`http://localhost:5173`** and automatically proxies `/api/*` requests to `http://localhost:8000`.
-- Public Timetable Front Door: `http://localhost:5173/`
+The frontend runs on **`http://localhost:5173`** and automatically proxies `/api/*` requests to `http://localhost:8000`:
+- Public Timetable Front Door & PDF Download: `http://localhost:5173/`
 - Registrar Login: `http://localhost:5173/login`
-- Protected Studio: `http://localhost:5173/studio`
+- Protected Registrar Studio: `http://localhost:5173/studio`
 
-### 4. Standalone Pure-Python Engine & Automated Tests
+### 4. Standalone Pure-Python Engine & Automated Test Suite
 
 ```bash
 # Run standalone pure-Python CSP + SA benchmark (Mode A & Mode B)
 python3 src/csp/solver.py
 
-# Run all unit tests (optimizer, session pinning, auth & API)
+# Run the complete automated test suite (20 tests across solver, chunker, optimizer, API & PDFs)
 python3 -m unittest discover -s tests -v
 
-# Run end-to-end HTTP smoke verification against a live uvicorn instance
-python3 scripts/verify_sprint2.py
+# Build production frontend bundle
+cd frontend && npm run build
 ```

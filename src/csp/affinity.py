@@ -45,6 +45,72 @@ def extract_primary_prefix(session: Dict[str, Any]) -> str:
     return extract_module_prefixes(session)[0]
 
 
+def _parse_venue_dept_prefixes(venue: Dict[str, Any]) -> Set[str]:
+    """Extracts uppercase department prefixes from venue['departmentPrefix'] (comma/semicolon/slash separated)."""
+    raw = str(venue.get("departmentPrefix") or venue.get("department_prefix") or "").strip()
+    if not raw:
+        return set()
+    tokens = {
+        tok.strip().upper()
+        for tok in re.split(r"[;,/\s]+", raw)
+        if tok.strip()
+    }
+    tokens.discard("GEN")
+    return tokens
+
+
+def _extract_cohort_dept_codes(cohorts: List[str]) -> Set[str]:
+    """Extracts trailing department codes from cohort IDs (e.g., 'L7-2CS' -> 'CS', 'L7-2IT-E' -> 'IT')."""
+    codes: Set[str] = set()
+    for c in cohorts:
+        cleaned = re.sub(r"-E$", "", str(c or "").strip().upper())
+        m = re.search(r"([A-Z]{2,5})$", cleaned)
+        if m:
+            codes.add(m.group(1))
+    return codes
+
+
+def _venue_matches_session_dept(
+    venue_prefixes: Set[str],
+    session_prefixes: List[str],
+    cohort_depts: Set[str],
+) -> bool:
+    if not venue_prefixes:
+        return False
+    for vp in venue_prefixes:
+        if vp in session_prefixes or vp in cohort_depts:
+            return True
+        if len(vp) >= 2:
+            for sp in session_prefixes:
+                if sp.startswith(vp) or (len(sp) >= 2 and vp.startswith(sp)):
+                    return True
+            for cd in cohort_depts:
+                if cd.startswith(vp) or (len(cd) >= 2 and vp.startswith(cd)):
+                    return True
+    return False
+
+
+def _match_preferred_venue_ids(
+    session: Dict[str, Any],
+    venues: List[Dict[str, Any]],
+    base_cat_set: Set[int | str],
+) -> List[int | str]:
+    pref_raw = session.get("preferredVenue")
+    if pref_raw is None or str(pref_raw).strip() == "":
+        return []
+    pref_str = str(pref_raw).strip()
+    pref_lower = pref_str.lower()
+    matched: List[int | str] = []
+    for v in venues:
+        vid = v.get("venueId")
+        if vid not in base_cat_set:
+            continue
+        if str(vid) == pref_str or str(v.get("name", "")).strip().lower() == pref_lower:
+            if vid not in matched:
+                matched.append(vid)
+    return matched
+
+
 def generate_venue_affinity_config(
     sessions: List[Dict[str, Any]],
     venues: List[Dict[str, Any]],
@@ -188,10 +254,53 @@ def resolve_session_venues_and_tiers(
     base_cat_set = set(base_cat_vids)
     venue_by_id = {v["venueId"]: v for v in venues}
 
+    mod_code = session["moduleCode"]
+    prefixes = extract_module_prefixes(session)
+    cohorts = session.get("targetCohorts", [])
+    cohort_depts = _extract_cohort_dept_codes(cohorts)
+
+    # Institution-agnostic signals present directly on uploaded CSVs/JSONs:
+    # 1) Exact preferredVenue on session -> Tier 1A
+    # 2) Venue departmentPrefix matching module prefix or cohort dept -> Tier 1C
+    direct_preferred_vids = _match_preferred_venue_ids(session, venues, base_cat_set)
+    direct_dept_vids: List[int | str] = []
+    for vid in base_cat_vids:
+        v_obj = venue_by_id.get(vid)
+        if not v_obj:
+            continue
+        v_prefs = _parse_venue_dept_prefixes(v_obj)
+        if _venue_matches_session_dept(v_prefs, prefixes, cohort_depts):
+            direct_dept_vids.append(vid)
+
     if not affinity_config:
-        tier_labels = {vid: "Tier 1A: Module Preferred" for vid in base_cat_vids}
-        tier_ranks = {vid: 1 for vid in base_cat_vids}
-        return base_cat_vids, tier_labels, tier_ranks
+        if not direct_preferred_vids and not direct_dept_vids:
+            tier_labels = {vid: "Tier 1A: Module Preferred" for vid in base_cat_vids}
+            tier_ranks = {vid: 1 for vid in base_cat_vids}
+            return base_cat_vids, tier_labels, tier_ranks
+
+        ordered_vids: List[int | str] = []
+        tier_labels: Dict[int | str, str] = {}
+        tier_ranks: Dict[int | str, int] = {}
+
+        def _add_direct(cands: List[int | str], label: str, rank: int) -> None:
+            for vid in cands:
+                if vid not in tier_labels:
+                    ordered_vids.append(vid)
+                    tier_labels[vid] = label
+                    tier_ranks[vid] = rank
+
+        _add_direct(direct_preferred_vids, "Tier 1A: Module Preferred", 1)
+        _add_direct(direct_dept_vids, "Tier 1C: Dept Prefix Pool", 1)
+
+        remaining_general = sorted(
+            [vid for vid in base_cat_vids if vid not in tier_labels],
+            key=lambda vid: (
+                int(venue_by_id.get(vid, {}).get("capacity") or 9999),
+                str(vid),
+            ),
+        )
+        _add_direct(remaining_general, "Tier 2: General Overflow", 2)
+        return ordered_vids, tier_labels, tier_ranks
 
     policy = affinity_config.get("category_overflow_policies", {}).get(req_cat, {})
     restrict_hard = bool(policy.get("restrict_to_prefix_or_module_pool", False))
@@ -201,15 +310,11 @@ def resolve_session_venues_and_tiers(
     by_pref = mod_rules.get("by_module_prefix", {})
     by_coh = affinity_config.get("cohort_home_venues", {})
 
-    mod_code = session["moduleCode"]
-    prefixes = extract_module_prefixes(session)
-    cohorts = session.get("targetCohorts", [])
-
-    # Tier 1A: Exact module code venues within base_cat_set
-    tier_1a: List[int | str] = [
-        vid for vid in by_mod.get(mod_code, {}).get(req_cat, [])
-        if vid in base_cat_set
-    ]
+    # Tier 1A: Direct preferredVenue + exact module code venues within base_cat_set
+    tier_1a: List[int | str] = list(direct_preferred_vids)
+    for vid in by_mod.get(mod_code, {}).get(req_cat, []):
+        if vid in base_cat_set and vid not in tier_1a:
+            tier_1a.append(vid)
 
     # Tier 1B: Cohort home venues across targetCohorts (ranked by how many targetCohorts share the home room)
     cohort_vid_score: Counter = Counter()
@@ -229,7 +334,7 @@ def resolve_session_venues_and_tiers(
         )
     ]
 
-    # Tier 1C: Department prefix pool across all prefixes of the session
+    # Tier 1C: Department prefix pool (from affinity_config + venue.departmentPrefix)
     tier_1c: List[int | str] = []
     for pref in prefixes:
         pref_entry = by_pref.get(pref, {}).get(req_cat, {})
@@ -241,6 +346,9 @@ def resolve_session_venues_and_tiers(
         for vid in pref_vids:
             if vid in base_cat_set and vid not in tier_1c:
                 tier_1c.append(vid)
+    for vid in direct_dept_vids:
+        if vid not in tier_1c:
+            tier_1c.append(vid)
 
     # Assemble ordered unique list and tier annotations
     ordered_vids: List[int | str] = []

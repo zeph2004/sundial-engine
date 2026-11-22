@@ -20,7 +20,8 @@ dist/
 .vscode/
 *.swp
 *.tmp
+*.log
 
-# Runtime uploads
-data/uploads/*
-!data/uploads/.gitkeep
+# Runtime state & uploads
+data/uploads/
+data/processed/app_state.json

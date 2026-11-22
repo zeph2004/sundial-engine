@@ -145,6 +145,17 @@ export interface OptimizerConfig {
   [key: string]: unknown;
 }
 
+export interface SessionChunkingRule {
+  preferred: number;
+  max: number;
+}
+
+export interface SessionChunkingConfig {
+  min_periods: number;
+  by_type: Record<string, SessionChunkingRule>;
+  default: SessionChunkingRule;
+}
+
 export interface SchemaConfig {
   schema_version?: string;
   institution?: Record<string, unknown>;
@@ -160,6 +171,7 @@ export interface SchemaConfig {
   };
   soft_constraints?: Record<string, SoftConstraintRuleConfig>;
   optimizer?: OptimizerConfig;
+  session_chunking?: SessionChunkingConfig;
   [key: string]: unknown;
 }
 
@@ -591,4 +603,51 @@ export async function clearAllPins(): Promise<ClearPinsResponse> {
   return apiFetch<ClearPinsResponse>("/api/pins", {
     method: "DELETE",
   });
+}
+
+/* ==========================================================================
+   Noticeboard PDF Export Endpoints (Sprint 6)
+   ========================================================================== */
+
+export function getPublicPdfUrl(lens: LensType, entityId: string): string {
+  return `/api/public/export/pdf?lens=${encodeURIComponent(lens)}&id=${encodeURIComponent(entityId)}`;
+}
+
+export async function downloadMasterPdf(lens: LensType): Promise<void> {
+  const token = getStoredToken();
+  const headers = new Headers();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(
+    `/api/export/master-pdf?lens=${encodeURIComponent(lens)}`,
+    {
+      method: "GET",
+      headers,
+    }
+  );
+
+  if (!res.ok) {
+    let message = `Could not generate master ${lens} PDF (${res.status})`;
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") {
+        message = data.detail;
+      }
+    } catch {
+      // ignore non-JSON body
+    }
+    throw new ApiError(res.status, message);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `master_${lens}_timetables.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

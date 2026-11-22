@@ -122,6 +122,45 @@ def validate_schema_config(schema_cfg: Any) -> List[str]:
             ):
                 errors.append("'optimizer.cooling_rate' must be a float strictly between 0 and 1.")
 
+    # 6. session_chunking (optional, validated when present)
+    chunking = schema_cfg.get("session_chunking")
+    if chunking is not None:
+        if not isinstance(chunking, dict):
+            errors.append("'session_chunking' must be a JSON object.")
+        else:
+            min_p = chunking.get("min_periods", 2)
+            if isinstance(min_p, bool) or not isinstance(min_p, int) or min_p < 1:
+                errors.append("'session_chunking.min_periods' must be an integer >= 1.")
+
+            def _validate_rule_entry(label: str, entry: Any) -> None:
+                if not isinstance(entry, dict):
+                    errors.append(f"'{label}' must be an object with 'preferred' and 'max'.")
+                    return
+                pref = entry.get("preferred")
+                max_p = entry.get("max")
+                if isinstance(pref, bool) or not isinstance(pref, int) or pref < 1:
+                    errors.append(f"'{label}.preferred' must be an integer >= 1.")
+                if isinstance(max_p, bool) or not isinstance(max_p, int) or max_p < 1:
+                    errors.append(f"'{label}.max' must be an integer >= 1.")
+                elif isinstance(pref, int) and not isinstance(pref, bool) and max_p < pref:
+                    errors.append(f"'{label}.max' ({max_p}) must be >= '{label}.preferred' ({pref}).")
+
+            if "default" in chunking:
+                _validate_rule_entry("session_chunking.default", chunking["default"])
+            else:
+                errors.append("Missing required 'session_chunking.default' rule.")
+
+            by_type = chunking.get("by_type")
+            if by_type is not None:
+                if not isinstance(by_type, dict):
+                    errors.append("'session_chunking.by_type' must be an object mapping session types to rules.")
+                else:
+                    for stype, rule in by_type.items():
+                        if not isinstance(stype, str) or not stype.strip():
+                            errors.append("'session_chunking.by_type' keys must be non-empty strings.")
+                            continue
+                        _validate_rule_entry(f"session_chunking.by_type.{stype}", rule)
+
     return errors
 
 
@@ -358,6 +397,14 @@ class AppStateManager:
                 "saturday_explanations": [],
             }
             dirty = True
+        schema = self.state.get("schema")
+        if isinstance(schema, dict) and "session_chunking" not in schema:
+            default_schema_path = self.root / "configs" / "institution_schema.json"
+            if default_schema_path.exists():
+                default_schema = load_json(default_schema_path)
+                if "session_chunking" in default_schema:
+                    schema["session_chunking"] = deepcopy(default_schema["session_chunking"])
+                    dirty = True
         if dirty:
             self.save()
 

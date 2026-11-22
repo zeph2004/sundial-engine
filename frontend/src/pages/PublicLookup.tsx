@@ -3,14 +3,15 @@ import { Link } from "react-router-dom";
 import {
   Building2,
   Calendar,
+  Download,
   Eye,
   GraduationCap,
   LogIn,
-  Printer,
   SlidersHorizontal,
   User,
 } from "lucide-react";
 import {
+  getPublicPdfUrl,
   getPublicTimetable,
   getStoredToken,
   type LensType,
@@ -239,14 +240,17 @@ export const PublicLookup: React.FC = () => {
                 />
               </div>
 
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => window.print()}
+              <a
+                href={selectedId ? getPublicPdfUrl(lens, selectedId) : "#"}
+                download
+                className={`btn btn-primary ${!selectedId ? "is-disabled-link" : ""}`}
+                onClick={(e) => {
+                  if (!selectedId) e.preventDefault();
+                }}
               >
-                <Printer size={15} />
-                <span>Download PDF / Print</span>
-              </button>
+                <Download size={15} />
+                <span>Download PDF</span>
+              </a>
             </section>
 
             {/* Print-Only Formal Sheet Header */}
@@ -304,14 +308,17 @@ export const PublicLookup: React.FC = () => {
                 </span>
                 <span>{entitySummary.stream}</span>
               </div>
-              <button
-                type="button"
-                className="btn btn-primary btn-full"
-                onClick={() => window.print()}
+              <a
+                href={selectedId ? getPublicPdfUrl(lens, selectedId) : "#"}
+                download
+                className={`btn btn-primary btn-full ${!selectedId ? "is-disabled-link" : ""}`}
+                onClick={(e) => {
+                  if (!selectedId) e.preventDefault();
+                }}
               >
-                <Printer size={16} />
+                <Download size={16} />
                 <span>Download PDF</span>
-              </button>
+              </a>
               <button
                 type="button"
                 className="btn btn-ghost btn-full"

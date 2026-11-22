@@ -117,12 +117,17 @@ class TimetableCSPSolver:
 
         # Precompute slot_to_Mask[(day, start_p, duration)] -> 108-bit int
         self.slot_to_Mask: Dict[Tuple[str, int, int], int] = {}
+        all_durations = set(
+            schema.get("streams", {}).get("full_time", {}).get("supported_durations", [1, 2, 3, 4, 6])
+        ) | set(
+            schema.get("streams", {}).get("evening", {}).get("supported_durations", [1, 2, 3, 4, 6])
+        ) | {int(s["durationPeriods"]) for s in sessions}
         self.slot_single_bit: Dict[Tuple[str, int], int] = {}
         for day in active_days:
             for p in range(1, self.periods_per_day + 1):
                 bit = compute_slot_bit(self.day_to_idx[day], p, self.periods_per_day)
                 self.slot_single_bit[(day, p)] = 1 << bit
-            for dur in (1, 2, 4, 6):
+            for dur in sorted(all_durations):
                 for start_p in range(1, self.periods_per_day - dur + 2):
                     self.slot_to_Mask[(day, start_p, dur)] = compute_time_mask(
                         day, start_p, dur, self.day_to_idx, self.periods_per_day
@@ -208,6 +213,30 @@ class TimetableCSPSolver:
         self.cohort_busy_mask: Dict[str, int] = defaultdict(int)
         self.lecturer_busy_mask: Dict[str, int] = defaultdict(int)
         self.unassigned_vars: Set[str] = set(self.all_var_ids)
+
+        # Hard invariant: No Back-to-Back Venue Hopping
+        # Precompute same-(moduleCode, sessionType) peers sharing at least one cohort
+        self.same_module_peers: Dict[str, List[str]] = {sid: [] for sid in self.all_var_ids}
+        mod_type_cohorts: Dict[Tuple[str, str], List[Tuple[str, Set[str]]]] = defaultdict(list)
+        for s in sessions:
+            sid = s["sessionId"]
+            mt_key = (
+                str(s.get("moduleCode", "")).strip().upper(),
+                str(s.get("sessionType", "")).strip().lower(),
+            )
+            mod_type_cohorts[mt_key].append((sid, set(s.get("targetCohorts", []))))
+        for entries in mod_type_cohorts.values():
+            if len(entries) < 2:
+                continue
+            for idx_a in range(len(entries)):
+                sid_a, cohs_a = entries[idx_a]
+                if not cohs_a:
+                    continue
+                for idx_b in range(idx_a + 1, len(entries)):
+                    sid_b, cohs_b = entries[idx_b]
+                    if cohs_a & cohs_b:
+                        self.same_module_peers[sid_a].append(sid_b)
+                        self.same_module_peers[sid_b].append(sid_a)
         self.unassigned_degree: Dict[str, int] = dict(self.static_degree)
         self.assignments: Dict[str, Tuple[str, int, int | str]] = {}
         self.pinned_session_ids: Set[str] = set()
@@ -291,17 +320,41 @@ class TimetableCSPSolver:
         var_overlaps = self.var_overlapping_slots
 
         unassigned_neighbors = [nb for nb in self.adj[sid] if nb in unassigned]
+        assigned_peers = [
+            (peer, self.assignments[peer], self.var_duration[peer])
+            for peer in self.same_module_peers[sid]
+            if peer in self.assignments
+        ]
 
         scored_placements: List[Tuple[int, int, int, int, int, int, int, int, Tuple[str, int, int | str]]] = []
         for day, start_p in active_slots[sid]:
             time_mask = self.slot_to_Mask[(day, start_p, dur)]
 
+            # Hard rule: if adjacent to an assigned same-(module, type, cohort) peer on this day,
+            # must use the exact same venue_id (zero back-to-back venue hopping).
+            forced_vid: Optional[int | str] = None
+            hop_conflict = False
+            end_p_excl = start_p + dur
+            for _peer_sid, (p_day, p_sp, p_vid), p_dur in assigned_peers:
+                if p_day == day and (end_p_excl == p_sp or p_sp + p_dur == start_p):
+                    if forced_vid is None:
+                        forced_vid = p_vid
+                    elif forced_vid != p_vid:
+                        hop_conflict = True
+                        break
+            if hop_conflict:
+                continue
+
             # Find best free venue in priority order [Tier 1A -> Tier 1B -> Tier 1C -> Tier 2]
             chosen_venue: Optional[int | str] = None
-            for vid in compat_vids:
-                if (venue_busy[vid] & time_mask) == 0:
-                    chosen_venue = vid
-                    break
+            if forced_vid is not None:
+                if forced_vid in tier_ranks and (venue_busy[forced_vid] & time_mask) == 0:
+                    chosen_venue = forced_vid
+            else:
+                for vid in compat_vids:
+                    if (venue_busy[vid] & time_mask) == 0:
+                        chosen_venue = vid
+                        break
 
             if chosen_venue is None:
                 continue
@@ -1070,6 +1123,7 @@ def verify_solution(
     lecturer_overlaps = 0
     cohort_overlaps = 0
     venue_double_bookings = 0
+    venue_hopping_violations = 0
 
     n = len(sessions)
     for i in range(n):
@@ -1081,6 +1135,8 @@ def verify_solution(
         dur_a = sa["durationPeriods"]
         lecs_a = set(sa.get("lecturers", []))
         cohs_a = set(sa.get("targetCohorts", []))
+        mod_a = str(sa.get("moduleCode", "")).strip().upper()
+        type_a = str(sa.get("sessionType", "")).strip().lower()
 
         for p in range(start_a, start_a + dur_a):
             ven_slot_usage[(ven_a, day_a, p)].append(sida)
@@ -1097,15 +1153,22 @@ def verify_solution(
             day_b, start_b, ven_b = assignments[sidb]
             dur_b = sb["durationPeriods"]
 
-            if not intervals_overlap(day_a, start_a, dur_a, day_b, start_b, dur_b):
-                continue
-
-            if lecs_a & set(sb.get("lecturers", [])):
-                lecturer_overlaps += 1
-            if cohs_a & set(sb.get("targetCohorts", [])):
-                cohort_overlaps += 1
-            if ven_a == ven_b:
-                venue_double_bookings += 1
+            if intervals_overlap(day_a, start_a, dur_a, day_b, start_b, dur_b):
+                if lecs_a & set(sb.get("lecturers", [])):
+                    lecturer_overlaps += 1
+                if cohs_a & set(sb.get("targetCohorts", [])):
+                    cohort_overlaps += 1
+                if ven_a == ven_b:
+                    venue_double_bookings += 1
+            elif (
+                day_a == day_b
+                and ven_a != ven_b
+                and (start_a + dur_a == start_b or start_b + dur_b == start_a)
+                and mod_a == str(sb.get("moduleCode", "")).strip().upper()
+                and type_a == str(sb.get("sessionType", "")).strip().lower()
+                and bool(cohs_a & set(sb.get("targetCohorts", [])))
+            ):
+                venue_hopping_violations += 1
 
     evening_total = 0
     evening_twilight_used = 0
@@ -1149,6 +1212,7 @@ def verify_solution(
         and lecturer_overlaps == 0
         and cohort_overlaps == 0
         and venue_double_bookings == 0
+        and venue_hopping_violations == 0
     )
 
     return {
@@ -1160,6 +1224,7 @@ def verify_solution(
         "lecturer_overlaps": lecturer_overlaps,
         "cohort_overlaps": cohort_overlaps,
         "venue_double_bookings": venue_double_bookings,
+        "venue_hopping_violations": venue_hopping_violations,
         "lecturer_slot_collisions": sum(1 for v in lec_slot_usage.values() if len(v) > 1),
         "cohort_slot_collisions": sum(1 for v in coh_slot_usage.values() if len(v) > 1),
         "venue_slot_collisions": sum(1 for v in ven_slot_usage.values() if len(v) > 1),

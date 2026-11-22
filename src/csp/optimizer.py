@@ -205,6 +205,7 @@ class SoftConstraintEngine:
         "minimize_cohort_idle_gaps",
         "balance_weekly_workload",
         "prefer_exact_module_venue",
+        "spread_module_across_days",
     )
 
     def __init__(
@@ -293,6 +294,22 @@ class SoftConstraintEngine:
 
         c_gaps = self.rule_configs["minimize_cohort_idle_gaps"]
         self.w_idle_gaps: float = c_gaps["weight"] if c_gaps["enabled"] else 0.0
+
+        c_spread = self.rule_configs["spread_module_across_days"]
+        self.w_spread_module: float = c_spread["weight"] if c_spread["enabled"] else 0.0
+        self.spread_adjacent_extra: float = float(
+            c_spread["params"].get("adjacent_extra_penalty", 2.0)
+        )
+
+        # Precompute (cohort, moduleCode_upper, sessionType_lower) group keys per session
+        self.session_mod_groups: Dict[str, Tuple[Tuple[str, str, str], ...]] = {}
+        for s in sessions:
+            sid = s["sessionId"]
+            mc = str(s.get("moduleCode", "")).strip().upper()
+            st = str(s.get("sessionType", "")).strip().lower()
+            self.session_mod_groups[sid] = tuple(
+                (c, mc, st) for c in s.get("targetCohorts", [])
+            )
         self.allowed_weekday_free_gaps: int = int(
             c_gaps["params"].get("allowed_weekday_free_gaps", 2)
         )
@@ -713,6 +730,27 @@ class SoftConstraintEngine:
 
         return cost
 
+    def module_day_spread_raw(self, intervals: List[Tuple[int, int]]) -> float:
+        """
+        Computes raw penalty for multiple sessions of the same (cohort, module_code, session_type)
+        on the same day: (k - 1) base penalty + adjacent_extra_penalty for each back-to-back pair.
+        """
+        k = len(intervals)
+        if k <= 1:
+            return 0.0
+        ordered = sorted(intervals)
+        raw = float(k - 1)
+        if self.spread_adjacent_extra > 0.0:
+            for idx in range(k - 1):
+                if ordered[idx][0] + ordered[idx][1] == ordered[idx + 1][0]:
+                    raw += self.spread_adjacent_extra
+        return raw
+
+    def module_day_spread_cost(self, intervals: List[Tuple[int, int]]) -> float:
+        if self.w_spread_module == 0.0:
+            return 0.0
+        return self.w_spread_module * self.module_day_spread_raw(intervals)
+
     def evaluate_full_breakdown(
         self,
         assignments: Dict[str, Tuple[str, int, int | str]],
@@ -731,6 +769,7 @@ class SoftConstraintEngine:
 
         cohort_day_masks: Dict[Tuple[str, int], int] = defaultdict(int)
         lecturer_day_masks: Dict[Tuple[str, int], int] = defaultdict(int)
+        group_day_intervals: Dict[Tuple[Tuple[str, str, str], int], List[Tuple[int, int]]] = defaultdict(list)
 
         for s in self.sessions:
             sid = s["sessionId"]
@@ -745,6 +784,8 @@ class SoftConstraintEngine:
                 cohort_day_masks[(c, d_idx)] |= local_mask
             for l in s.get("lecturers", []):
                 lecturer_day_masks[(l, d_idx)] |= local_mask
+            for gkey in self.session_mod_groups[sid]:
+                group_day_intervals[(gkey, d_idx)].append((start_p, dur))
 
             # 1. minimize_saturday_theory, 2. minimize_saturday_overflow & 3. prefer_shared_practicals_on_saturday
             if d_idx == self.saturday_idx:
@@ -819,6 +860,14 @@ class SoftConstraintEngine:
                         self.lecturer_workload_weight * float(excess)
                     )
                     counts_by_rule["balance_weekly_workload"] += 1
+
+        # 8. spread_module_across_days
+        for intervals in group_day_intervals.values():
+            if len(intervals) > 1:
+                raw_sp_mod = self.module_day_spread_raw(intervals)
+                if raw_sp_mod > 0.0:
+                    raw_by_rule["spread_module_across_days"] += raw_sp_mod
+                    counts_by_rule["spread_module_across_days"] += len(intervals) - 1
 
         weighted_by_rule: Dict[str, float] = {}
         total_obj = 0.0
@@ -895,9 +944,14 @@ class SimulatedAnnealingOptimizer:
         self.saturday_idx = self.engine.saturday_idx
 
         # Precompute 108-bit global mask and 18-bit day-local mask for every (day_idx, start_p, dur)
+        all_durations = sorted(
+            set(schema.get("streams", {}).get("full_time", {}).get("supported_durations", [1, 2, 3, 4, 6]))
+            | set(schema.get("streams", {}).get("evening", {}).get("supported_durations", [1, 2, 3, 4, 6]))
+            | {int(s["durationPeriods"]) for s in sessions}
+        )
         self.global_mask_lut: Dict[Tuple[int, int, int], int] = {}
         self.local_mask_lut: Dict[Tuple[int, int], int] = {}
-        for dur in (1, 2, 4, 6):
+        for dur in all_durations:
             for start_p in range(1, self.periods_per_day - dur + 2):
                 l_mask = ((1 << dur) - 1) << (start_p - 1)
                 self.local_mask_lut[(start_p, dur)] = l_mask
@@ -932,7 +986,7 @@ class SimulatedAnnealingOptimizer:
         weekday_slots_cache: Dict[Tuple[bool, int], Tuple[Tuple[int, int, int, int], ...]] = {}
 
         for is_eve in (False, True):
-            for dur in (1, 2, 4, 6):
+            for dur in all_durations:
                 raw_slots = get_valid_time_slots(is_evening=is_eve, duration=dur, schema=schema)
                 encoded = []
                 wk_encoded = []
@@ -1055,6 +1109,92 @@ class SimulatedAnnealingOptimizer:
             self.lecturer_day_cost_cache[(l, d_idx)] = lc
             self.current_objective += lc
 
+        # Hard invariant: No Back-to-Back Venue Hopping peers
+        self.same_module_peers: Dict[str, List[str]] = {sid: [] for sid in self.all_sids}
+        mt_buckets: Dict[Tuple[str, str], List[Tuple[str, Set[str]]]] = defaultdict(list)
+        for s in sessions:
+            sid = s["sessionId"]
+            mt_key = (
+                str(s.get("moduleCode", "")).strip().upper(),
+                str(s.get("sessionType", "")).strip().lower(),
+            )
+            mt_buckets[mt_key].append((sid, set(s.get("targetCohorts", []))))
+        for entries in mt_buckets.values():
+            if len(entries) < 2:
+                continue
+            for idx_a in range(len(entries)):
+                sid_a, cohs_a = entries[idx_a]
+                if not cohs_a:
+                    continue
+                for idx_b in range(idx_a + 1, len(entries)):
+                    sid_b, cohs_b = entries[idx_b]
+                    if cohs_a & cohs_b:
+                        self.same_module_peers[sid_a].append(sid_b)
+                        self.same_module_peers[sid_b].append(sid_a)
+
+        # Incremental state for spread_module_across_days: (gkey, d_idx) -> list of (sid, start_p, dur)
+        self.group_day_items: Dict[Tuple[Tuple[str, str, str], int], List[Tuple[str, int, int]]] = defaultdict(list)
+        self.group_day_cost_cache: Dict[Tuple[Tuple[str, str, str], int], float] = defaultdict(float)
+        for sid, (d_idx, start_p, _, _, _) in self.state.items():
+            dur = self.var_duration[sid]
+            for gkey in self.engine.session_mod_groups[sid]:
+                self.group_day_items[(gkey, d_idx)].append((sid, start_p, dur))
+        for k, items in list(self.group_day_items.items()):
+            gc = self.engine.module_day_spread_cost([(sp, dr) for _, sp, dr in items])
+            self.group_day_cost_cache[k] = gc
+            self.current_objective += gc
+
+    def _violates_venue_hopping(
+        self,
+        sid: str,
+        d_idx: int,
+        start_p: int,
+        vid: int | str,
+        ignore_sid: Optional[str] = None,
+    ) -> bool:
+        dur = self.var_duration[sid]
+        end_excl = start_p + dur
+        for peer in self.same_module_peers[sid]:
+            if peer == ignore_sid:
+                continue
+            p_d, p_sp, p_vid, _, _ = self.state[peer]
+            if p_d == d_idx:
+                p_dur = self.var_duration[peer]
+                if (end_excl == p_sp or p_sp + p_dur == start_p) and p_vid != vid:
+                    return True
+        return False
+
+    def _find_best_free_venue_no_hop(
+        self,
+        sid: str,
+        d_idx: int,
+        start_p: int,
+        g_mask: int,
+        ignore_sid: Optional[str] = None,
+    ) -> Optional[int | str]:
+        dur = self.var_duration[sid]
+        end_excl = start_p + dur
+        forced_vid: Optional[int | str] = None
+        for peer in self.same_module_peers[sid]:
+            if peer == ignore_sid:
+                continue
+            p_d, p_sp, p_vid, _, _ = self.state[peer]
+            if p_d == d_idx:
+                p_dur = self.var_duration[peer]
+                if end_excl == p_sp or p_sp + p_dur == start_p:
+                    if forced_vid is None:
+                        forced_vid = p_vid
+                    elif forced_vid != p_vid:
+                        return None
+        if forced_vid is not None:
+            if (
+                forced_vid in self.compatible_venues[sid]
+                and (self.venue_busy_108[forced_vid] & g_mask) == 0
+            ):
+                return forced_vid
+            return None
+        return self._find_best_free_venue(sid, g_mask)
+
     def _export_current_assignments(self) -> Dict[str, Tuple[str, int, int | str]]:
         days = self.active_days
         return {
@@ -1104,7 +1244,7 @@ class SimulatedAnnealingOptimizer:
             if old_raw <= 0.0:
                 continue
             self.venue_busy_108[old_vid] &= ~g_mask
-            best_vid = self._find_best_free_venue(sid, g_mask)
+            best_vid = self._find_best_free_venue_no_hop(sid, d_idx, start_p, g_mask)
             if best_vid is not None and best_vid != old_vid:
                 new_raw = self.engine.session_venue_raw_penalty[sid].get(best_vid, 0.0)
                 if new_raw < old_raw:
@@ -1153,7 +1293,7 @@ class SimulatedAnnealingOptimizer:
             # Same time slot: check if a strictly better Tier 1A venue is now free
             if self.engine.session_venue_raw_penalty[sid].get(old_vid, 0.0) == 0.0:
                 return False, 0.0
-            new_vid = self._find_best_free_venue(sid, new_g_mask)
+            new_vid = self._find_best_free_venue_no_hop(sid, new_d_idx, new_start_p, new_g_mask)
             if new_vid is None or new_vid == old_vid:
                 return False, 0.0
             new_sc = self.engine.session_placement_cost(sid, new_d_idx, new_start_p, new_vid, new_l_mask)
@@ -1182,10 +1322,10 @@ class SimulatedAnnealingOptimizer:
             if ((coh_busy[c] & ~old_g_mask) & new_g_mask) != 0:
                 return False, 0.0
 
-        # 2. Hard Constraint Check: Find best available compatible venue at new_g_mask
+        # 2. Hard Constraint Check: Find best available compatible venue at new_g_mask (no venue hopping)
         # Temporarily clear old_vid's busy bits so old_vid itself can be reused if new_d_idx == old_d_idx
         self.venue_busy_108[old_vid] &= ~old_g_mask
-        new_vid = self._find_best_free_venue(sid, new_g_mask)
+        new_vid = self._find_best_free_venue_no_hop(sid, new_d_idx, new_start_p, new_g_mask)
         if new_vid is None:
             self.venue_busy_108[old_vid] |= old_g_mask
             return False, 0.0
@@ -1237,6 +1377,39 @@ class SimulatedAnnealingOptimizer:
                     - lec_cost_cache[k_new]
                 )
 
+        # Incremental Delta-E for spread_module_across_days
+        mod_groups = self.engine.session_mod_groups[sid]
+        dur_sid = self.var_duration[sid]
+        affected_group_items: Dict[Tuple[Tuple[str, str, str], int], List[Tuple[str, int, int]]] = {}
+        new_group_costs: Dict[Tuple[Tuple[str, str, str], int], float] = {}
+        if self.engine.w_spread_module > 0.0 and mod_groups:
+            if new_d_idx == old_d_idx:
+                for gkey in mod_groups:
+                    gk = (gkey, old_d_idx)
+                    updated = [
+                        (s_i, new_start_p, dur_sid) if s_i == sid else (s_i, sp_i, dr_i)
+                        for s_i, sp_i, dr_i in self.group_day_items[gk]
+                    ]
+                    affected_group_items[gk] = updated
+                    nc = self.engine.module_day_spread_cost([(sp_i, dr_i) for _, sp_i, dr_i in updated])
+                    new_group_costs[gk] = nc
+                    delta_e += nc - self.group_day_cost_cache[gk]
+            else:
+                for gkey in mod_groups:
+                    gk_old = (gkey, old_d_idx)
+                    gk_new = (gkey, new_d_idx)
+                    upd_old = [item for item in self.group_day_items[gk_old] if item[0] != sid]
+                    upd_new = list(self.group_day_items[gk_new]) + [(sid, new_start_p, dur_sid)]
+                    affected_group_items[gk_old] = upd_old
+                    affected_group_items[gk_new] = upd_new
+                    nc_old = self.engine.module_day_spread_cost([(sp_i, dr_i) for _, sp_i, dr_i in upd_old])
+                    nc_new = self.engine.module_day_spread_cost([(sp_i, dr_i) for _, sp_i, dr_i in upd_new])
+                    new_group_costs[gk_old] = nc_old
+                    new_group_costs[gk_new] = nc_new
+                    delta_e += (nc_old - self.group_day_cost_cache[gk_old]) + (
+                        nc_new - self.group_day_cost_cache[gk_new]
+                    )
+
         # 4. Metropolis Acceptance Criterion
         if delta_e <= 0.0 or rng.random() < math.exp(-delta_e / temperature):
             # Commit move
@@ -1285,6 +1458,27 @@ class SimulatedAnnealingOptimizer:
                     lec_cost_cache[k_new] = self.engine.lecturer_day_cost(
                         lmask_new, new_d_idx, l
                     )
+
+            for gk, upd_items in affected_group_items.items():
+                self.group_day_items[gk] = upd_items
+                self.group_day_cost_cache[gk] = new_group_costs[gk]
+            if not affected_group_items and mod_groups:
+                # Keep group_day_items synced even if w_spread_module == 0
+                if new_d_idx == old_d_idx:
+                    for gkey in mod_groups:
+                        gk = (gkey, old_d_idx)
+                        self.group_day_items[gk] = [
+                            (s_i, new_start_p, dur_sid) if s_i == sid else (s_i, sp_i, dr_i)
+                            for s_i, sp_i, dr_i in self.group_day_items[gk]
+                        ]
+                else:
+                    for gkey in mod_groups:
+                        gk_old = (gkey, old_d_idx)
+                        gk_new = (gkey, new_d_idx)
+                        self.group_day_items[gk_old] = [
+                            item for item in self.group_day_items[gk_old] if item[0] != sid
+                        ]
+                        self.group_day_items[gk_new].append((sid, new_start_p, dur_sid))
 
             self.state[sid] = (new_d_idx, new_start_p, new_vid, new_g_mask, new_l_mask)
             self.session_cost_cache[sid] = new_sc
@@ -1369,14 +1563,21 @@ class SimulatedAnnealingOptimizer:
         new_vida: Optional[int | str] = None
         new_vidb: Optional[int | str] = None
         if feasible:
-            new_vida = self._find_best_free_venue(sid_a, gmb)
+            new_vida = self._find_best_free_venue_no_hop(sid_a, db, spb, gmb, ignore_sid=sid_b)
             if new_vida is None:
                 feasible = False
             else:
                 self.venue_busy_108[new_vida] |= gmb
-                new_vidb = self._find_best_free_venue(sid_b, gma)
+                new_vidb = self._find_best_free_venue_no_hop(sid_b, da, spa, gma, ignore_sid=sid_a)
                 self.venue_busy_108[new_vida] &= ~gmb
                 if new_vidb is None:
+                    feasible = False
+                elif (
+                    sid_b in self.same_module_peers[sid_a]
+                    and da == db
+                    and (spb + self.var_duration[sid_a] == spa or spa + self.var_duration[sid_b] == spb)
+                    and new_vida != new_vidb
+                ):
                     feasible = False
 
         if not feasible or new_vida is None or new_vidb is None:
@@ -1456,6 +1657,35 @@ class SimulatedAnnealingOptimizer:
             new_lec_costs[(l, d_idx)] = nlc
             delta_e += nlc - lec_cost_cache[(l, d_idx)]
 
+        # Incremental Delta-E for spread_module_across_days on pairwise swap
+        mod_groups_a = self.engine.session_mod_groups[sid_a]
+        mod_groups_b = self.engine.session_mod_groups[sid_b]
+        dura = self.var_duration[sid_a]
+        durb = self.var_duration[sid_b]
+        swap_group_items: Dict[Tuple[Tuple[str, str, str], int], List[Tuple[str, int, int]]] = {}
+        for gkey in mod_groups_a:
+            swap_group_items.setdefault((gkey, da), list(self.group_day_items[(gkey, da)]))
+            swap_group_items.setdefault((gkey, db), list(self.group_day_items[(gkey, db)]))
+        for gkey in mod_groups_b:
+            swap_group_items.setdefault((gkey, da), list(self.group_day_items[(gkey, da)]))
+            swap_group_items.setdefault((gkey, db), list(self.group_day_items[(gkey, db)]))
+
+        for gkey in mod_groups_a:
+            swap_group_items[(gkey, da)] = [x for x in swap_group_items[(gkey, da)] if x[0] != sid_a]
+        for gkey in mod_groups_b:
+            swap_group_items[(gkey, db)] = [x for x in swap_group_items[(gkey, db)] if x[0] != sid_b]
+        for gkey in mod_groups_a:
+            swap_group_items[(gkey, db)].append((sid_a, spb, dura))
+        for gkey in mod_groups_b:
+            swap_group_items[(gkey, da)].append((sid_b, spa, durb))
+
+        swap_group_costs: Dict[Tuple[Tuple[str, str, str], int], float] = {}
+        if self.engine.w_spread_module > 0.0:
+            for gk, items in swap_group_items.items():
+                nc = self.engine.module_day_spread_cost([(sp_i, dr_i) for _, sp_i, dr_i in items])
+                swap_group_costs[gk] = nc
+                delta_e += nc - self.group_day_cost_cache[gk]
+
         if delta_e <= 0.0 or rng.random() < math.exp(-delta_e / temperature):
             # Commit pairwise swap
             for l in lecs_a:
@@ -1487,6 +1717,11 @@ class SimulatedAnnealingOptimizer:
                 for k, new_lmask in affected_lec_days.items():
                     lec_day_18[k] = new_lmask
                     lec_cost_cache[k] = new_lec_costs[k]
+
+            for gk, items in swap_group_items.items():
+                self.group_day_items[gk] = items
+                if gk in swap_group_costs:
+                    self.group_day_cost_cache[gk] = swap_group_costs[gk]
 
             self.state[sid_a] = (db, spb, new_vida, gmb, lmb)
             self.state[sid_b] = (da, spa, new_vidb, gma, lma)

@@ -43,6 +43,7 @@ python-dotenv==1.2.4
 python-multipart==0.0.34
 PyYAML==6.0.3
 pyzmq==27.3.0
+reportlab==5.1.0
 stack-data==0.6.3
 starlette==1.10.0
 tornado==6.6.1

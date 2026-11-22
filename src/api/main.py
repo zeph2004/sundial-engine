@@ -17,6 +17,7 @@ from src.api.auth import (
     require_admin,
     verify_admin_credentials,
 )
+from src.api.routes_export import router as export_router
 from src.api.routes_onboarding import router as onboarding_router
 from src.api.routes_public import router as public_router
 from src.api.routes_settings import router as settings_router
@@ -69,11 +70,12 @@ def create_app(state_manager: Optional[AppStateManager] = None) -> FastAPI:
     manager = state_manager or AppStateManager()
     app.state.manager = manager
 
-    # Mount Sprint 2 modular routers
+    # Mount modular routers
     app.include_router(settings_router)
     app.include_router(onboarding_router)
     app.include_router(solve_router)
     app.include_router(public_router)
+    app.include_router(export_router)
 
     @app.get("/api/health", tags=["System"])
     def health_check() -> Dict[str, Any]:

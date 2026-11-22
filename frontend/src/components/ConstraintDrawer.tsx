@@ -64,6 +64,11 @@ export const SOFT_CONSTRAINT_META: Record<string, ConstraintMeta> = {
     description:
       "Keeps specialised labs and modules in their primary department rooms.",
   },
+  spread_module_across_days: {
+    title: "Spread module across days",
+    description:
+      "Penalises scheduling multiple sessions of the same module on the same day.",
+  },
 };
 
 export function formatRuleTitle(key: string): string {

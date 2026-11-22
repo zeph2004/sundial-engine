@@ -15,6 +15,7 @@ from src.api.chunker import (
     expand_allocation_to_sessions,
     get_period_duration_minutes,
     hours_to_weekly_periods,
+    merge_duplicate_allocation_rows,
 )
 from src.api.state import AppStateManager
 
@@ -120,9 +121,24 @@ def _normalize_venue_category(raw_type: str) -> str:
     return VENUE_TYPE_TO_CATEGORY.get(cleaned.lower(), cleaned)
 
 
-def _infer_required_category(session_type: str, raw_category: str = "") -> str:
+def _infer_required_category(
+    session_type: str,
+    raw_category: str = "",
+    preferred_venue: str | None = None,
+    venues: List[Dict[str, Any]] | None = None,
+    module_code: str = "",
+) -> str:
     if raw_category.strip():
         return _normalize_venue_category(raw_category)
+    # If preferred_venue matches a known venue in the workspace, inherit its exact category
+    if preferred_venue and venues:
+        pv_str = str(preferred_venue).strip()
+        pv_lower = pv_str.lower()
+        for v in venues:
+            if str(v.get("venueId", "")) == pv_str or str(v.get("name", "")).strip().lower() == pv_lower:
+                v_cat = str(v.get("category", "")).strip()
+                if v_cat:
+                    return v_cat
     st = session_type.strip().lower()
     if st in ("theory", "lecture", "tutorial"):
         return "Theory / Lecture Room"
@@ -134,6 +150,10 @@ def _infer_required_category(session_type: str, raw_category: str = "") -> str:
         return "Studio"
     if "field" in st or "site" in st:
         return "Field / Site"
+    # Computing/IT module labs default to Computer / Digital Lab
+    mc_upper = str(module_code or "").strip().upper()
+    if any(mc_upper.startswith(p) for p in ("CS", "IT", "ICT", "SE", "IS")):
+        return "Computer / Digital Lab"
     return "Engineering / Science Lab"
 
 
@@ -215,6 +235,7 @@ def _detect_sessions_mode(rows: List[Dict[str, Any]]) -> str:
 def _parse_sessions_rows(
     rows: List[Dict[str, Any]],
     schema_config: Dict[str, Any] | None = None,
+    venues: List[Dict[str, Any]] | None = None,
 ) -> Tuple[List[Dict[str, Any]], List[str], str, int]:
     mode = _detect_sessions_mode(rows)
     period_duration = get_period_duration_minutes(schema_config)
@@ -249,7 +270,11 @@ def _parse_sessions_rows(
             is_eve = _parse_bool(row.get("is_evening_stream", row.get("isEveningStream", False)))
             pref_venue = str(row.get("preferred_venue", row.get("preferredVenue", ""))).strip() or None
             req_cat = _infer_required_category(
-                stype, str(row.get("required_venue_category", row.get("requiredVenueCategory", "")))
+                stype,
+                str(row.get("required_venue_category", row.get("requiredVenueCategory", ""))),
+                preferred_venue=pref_venue,
+                venues=venues,
+                module_code=mod_code,
             )
 
             if not cohorts:
@@ -284,8 +309,13 @@ def _parse_sessions_rows(
             )
         return normalized, warnings, mode, period_duration
 
-    # Course Allocations mode: hours_per_week or weekly_periods -> balanced chunker
-    for idx, row in enumerate(rows, start=1):
+    # Course Allocations mode: merge duplicate un-overridden rows first to prevent 1-period fragments
+    try:
+        deduped_rows = merge_duplicate_allocation_rows(rows, mode)
+    except ValueError:
+        deduped_rows = rows
+
+    for idx, row in enumerate(deduped_rows, start=1):
         mod_code = str(row.get("module_code", row.get("moduleCode", ""))).strip()
         if not mod_code:
             raise ValueError(f"sessions row {idx}: missing required field 'module_code'.")
@@ -302,7 +332,11 @@ def _parse_sessions_rows(
         pref_venue = str(row.get("preferred_venue", row.get("preferredVenue", ""))).strip() or None
         split_override = row.get("split_override", row.get("splitOverride"))
         req_cat = _infer_required_category(
-            stype, str(row.get("required_venue_category", row.get("requiredVenueCategory", "")))
+            stype,
+            str(row.get("required_venue_category", row.get("requiredVenueCategory", ""))),
+            preferred_venue=pref_venue,
+            venues=venues,
+            module_code=mod_code,
         )
 
         if mode == "allocations_hours":
@@ -336,11 +370,17 @@ def _parse_sessions_rows(
                     f"Row {idx} ({mod_code}): invalid weekly_periods '{wp_raw}' (must be a positive integer)."
                 ) from exc
 
+        chunking_cfg = (
+            schema_config.get("session_chunking")
+            if isinstance(schema_config, dict)
+            else None
+        )
         chunks = chunk_weekly_periods(
             weekly_periods=weekly_periods,
             session_type=stype,
             split_override=str(split_override) if split_override is not None else None,
             row_label=f"Row {idx} ({mod_code})",
+            chunking_config=chunking_cfg,
         )
 
         if not cohorts:
@@ -514,6 +554,7 @@ async def upload_onboarding_entity(
             normalized, warnings, session_mode, period_duration = _parse_sessions_rows(
                 raw_records,
                 schema_config=manager.state.get("schema"),
+                venues=manager.state.get("venues", []),
             )
     except ValueError as exc:
         raise HTTPException(

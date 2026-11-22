@@ -4,6 +4,8 @@ import {
   ArrowRight,
   BarChart3,
   CheckCircle2,
+  ChevronDown,
+  FileDown,
   Loader2,
   PanelRightClose,
   PanelRightOpen,
@@ -15,6 +17,7 @@ import {
 import {
   ApiError,
   clearAllPins,
+  downloadMasterPdf,
   getPins,
   getSettings,
   pinSession,
@@ -29,7 +32,10 @@ import {
 import { ConstraintDrawer } from "../components/ConstraintDrawer";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { SolveDetailsModal } from "../components/SolveDetailsModal";
-import { TimetableGrid } from "../components/TimetableGrid";
+import {
+  TimetableGrid,
+  type MergedSession,
+} from "../components/TimetableGrid";
 
 export interface SolverStudioProps {
   timetable: PublicTimetableResponse;
@@ -48,7 +54,7 @@ const SHORT_DAY: Record<string, string> = {
 };
 
 interface ActivePopover {
-  session: PublicSession;
+  session: MergedSession;
   x: number;
   y: number;
 }
@@ -87,6 +93,11 @@ export const SolverStudio: React.FC<SolverStudioProps> = ({
   } | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  // Master PDF export dropdown state
+  const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
+  const [exportingLens, setExportingLens] = useState<LensType | null>(null);
+  const pdfMenuRef = useRef<HTMLDivElement | null>(null);
+
   // Session pinning popover state
   const [popover, setPopover] = useState<ActivePopover | null>(null);
   const [pinBusy, setPinBusy] = useState(false);
@@ -122,6 +133,40 @@ export const SolverStudio: React.FC<SolverStudioProps> = ({
       active = false;
     };
   }, []);
+
+  // Close Master PDF dropdown on outside click
+  useEffect(() => {
+    if (!pdfMenuOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (
+        pdfMenuRef.current &&
+        !pdfMenuRef.current.contains(e.target as Node)
+      ) {
+        setPdfMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [pdfMenuOpen]);
+
+  const handleExportMasterPdf = async (targetLens: LensType) => {
+    setPdfMenuOpen(false);
+    setExportingLens(targetLens);
+    setSolveError(null);
+    try {
+      await downloadMasterPdf(targetLens);
+    } catch (err) {
+      setSolveError({
+        message:
+          err instanceof Error
+            ? err.message
+            : `Could not export master ${targetLens} PDF.`,
+        isPreflight: false,
+      });
+    } finally {
+      setExportingLens(null);
+    }
+  };
 
   // Close pin popover on Escape or outside click
   useEffect(() => {
@@ -216,7 +261,7 @@ export const SolverStudio: React.FC<SolverStudioProps> = ({
   };
 
   const handleSessionClick = (
-    session: PublicSession,
+    session: MergedSession,
     anchorRect?: DOMRect
   ) => {
     setPinError(null);
@@ -236,26 +281,40 @@ export const SolverStudio: React.FC<SolverStudioProps> = ({
   const handleTogglePin = async () => {
     if (!popover) return;
     const s = popover.session;
-    const currentlyPinned = pinnedIds.has(s.session_id);
+    const constituents =
+      s.mergedSessions && s.mergedSessions.length > 0 ? s.mergedSessions : [s];
+    const currentlyPinned = constituents.some((item) =>
+      pinnedIds.has(item.session_id)
+    );
     setPinBusy(true);
     setPinError(null);
     try {
       if (currentlyPinned) {
-        await unpinSession(s.session_id);
+        for (const item of constituents) {
+          if (pinnedIds.has(item.session_id)) {
+            await unpinSession(item.session_id);
+          }
+        }
         setPinnedIds((prev) => {
           const next = new Set(prev);
-          next.delete(s.session_id);
+          for (const item of constituents) {
+            next.delete(item.session_id);
+          }
           return next;
         });
       } else {
-        await pinSession(s.session_id, {
-          day_idx: s.day_idx,
-          start_period: s.start_period,
-          venue_id: s.venue_id,
-        });
+        for (const item of constituents) {
+          await pinSession(item.session_id, {
+            day_idx: item.day_idx,
+            start_period: item.start_period,
+            venue_id: item.venue_id,
+          });
+        }
         setPinnedIds((prev) => {
           const next = new Set(prev);
-          next.add(s.session_id);
+          for (const item of constituents) {
+            next.add(item.session_id);
+          }
           return next;
         });
       }
@@ -370,6 +429,58 @@ export const SolverStudio: React.FC<SolverStudioProps> = ({
               </button>
             )}
 
+            <div className="pdf-menu-wrap" ref={pdfMenuRef}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={exportingLens !== null || solving}
+                aria-haspopup="menu"
+                aria-expanded={pdfMenuOpen}
+                onClick={() => setPdfMenuOpen((prev) => !prev)}
+              >
+                {exportingLens ? (
+                  <>
+                    <Loader2 size={14} className="spin-icon" />
+                    <span>Exporting {exportingLens}s...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileDown size={15} />
+                    <span>Master PDF</span>
+                    <ChevronDown size={13} />
+                  </>
+                )}
+              </button>
+              {pdfMenuOpen && (
+                <div className="pdf-dropdown-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="pdf-dropdown-item"
+                    onClick={() => handleExportMasterPdf("cohort")}
+                  >
+                    All Cohorts (Master PDF)
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="pdf-dropdown-item"
+                    onClick={() => handleExportMasterPdf("lecturer")}
+                  >
+                    All Lecturers (Master PDF)
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="pdf-dropdown-item"
+                    onClick={() => handleExportMasterPdf("venue")}
+                  >
+                    All Venues (Master PDF)
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               className="btn btn-primary"
@@ -474,7 +585,9 @@ export const SolverStudio: React.FC<SolverStudioProps> = ({
               <span className="pin-pop-code mono-num">
                 {popover.session.module_code}
               </span>
-              {pinnedIds.has(popover.session.session_id) && (
+              {(popover.session.mergedSessions || [popover.session]).some(
+                (item) => pinnedIds.has(item.session_id)
+              ) && (
                 <span className="pin-pop-badge">
                   <Pin size={10} /> Pinned
                 </span>
@@ -534,7 +647,9 @@ export const SolverStudio: React.FC<SolverStudioProps> = ({
           )}
 
           <div className="pin-pop-actions">
-            {pinnedIds.has(popover.session.session_id) ? (
+            {(popover.session.mergedSessions || [popover.session]).some(
+              (item) => pinnedIds.has(item.session_id)
+            ) ? (
               <button
                 type="button"
                 className="btn btn-secondary btn-full"

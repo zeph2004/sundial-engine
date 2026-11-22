@@ -2,20 +2,64 @@ import React, { useMemo, useState } from "react";
 import { Pin } from "lucide-react";
 import type { GridConfig, LensType, PublicSession } from "../api/client";
 
+export interface MergedSession extends PublicSession {
+  mergedSessions?: PublicSession[];
+}
+
 export interface TimetableGridProps {
   sessions: PublicSession[];
   gridConfig: GridConfig;
   lens: LensType;
   pinnedSessionIds?: Set<string>;
   activePopoverSessionId?: string | null;
-  onSessionClick?: (session: PublicSession, anchorRect?: DOMRect) => void;
+  onSessionClick?: (session: MergedSession, anchorRect?: DOMRect) => void;
 }
 
 interface DayRowCell {
   startPeriod: number;
   endPeriod: number;
   colspan: number;
-  sessions: PublicSession[];
+  sessions: MergedSession[];
+}
+
+function sameStringList(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  return sa.every((v, i) => v === sb[i]);
+}
+
+function mergeAdjacentDaySessions(
+  daySessions: PublicSession[],
+  breakSet: Set<number>
+): MergedSession[] {
+  const ordered = [...daySessions].sort(
+    (a, b) =>
+      a.start_period - b.start_period ||
+      b.duration_periods - a.duration_periods
+  );
+  const merged: MergedSession[] = [];
+  for (const s of ordered) {
+    const prev = merged[merged.length - 1];
+    if (prev) {
+      const prevEnd = prev.start_period + prev.duration_periods - 1;
+      const isAdjacent = prev.start_period + prev.duration_periods === s.start_period;
+      const crossesBreak = breakSet.has(prevEnd);
+      const sameIdentity =
+        prev.module_code === s.module_code &&
+        prev.session_type === s.session_type &&
+        String(prev.venue_id) === String(s.venue_id) &&
+        sameStringList(prev.lecturers, s.lecturers) &&
+        sameStringList(prev.cohorts, s.cohorts);
+      if (isAdjacent && !crossesBreak && sameIdentity) {
+        prev.duration_periods += s.duration_periods;
+        prev.mergedSessions = [...(prev.mergedSessions || [prev]), s];
+        continue;
+      }
+    }
+    merged.push({ ...s, mergedSessions: [s] });
+  }
+  return merged;
 }
 
 const SHORT_DAY: Record<string, string> = {
@@ -133,13 +177,10 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
   const lastVisibleP = visiblePeriods[visiblePeriods.length - 1] ?? 12;
 
   const buildRowCells = (dayName: string): DayRowCell[] => {
-    const daySessions = sessions
-      .filter((s) => s.day === dayName)
-      .sort(
-        (a, b) =>
-          a.start_period - b.start_period ||
-          b.duration_periods - a.duration_periods
-      );
+    const daySessions = mergeAdjacentDaySessions(
+      sessions.filter((s) => s.day === dayName),
+      breakSet
+    );
 
     const cells: DayRowCell[] = [];
     let p = firstVisibleP;
@@ -154,7 +195,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
         idx++;
       }
 
-      const group: PublicSession[] = [];
+      const group: MergedSession[] = [];
       let groupEnd = p;
 
       while (idx < daySessions.length && daySessions[idx].start_period <= p) {
@@ -333,9 +374,12 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                         {cell.sessions.length > 0 && (
                           <div className="tt-cell-stack">
                             {cell.sessions.map((s) => {
-                              const isPinned =
-                                Boolean(s.is_pinned) ||
-                                Boolean(pinnedSessionIds?.has(s.session_id));
+                              const constituents = s.mergedSessions || [s];
+                              const isPinned = constituents.some(
+                                (item) =>
+                                  Boolean(item.is_pinned) ||
+                                  Boolean(pinnedSessionIds?.has(item.session_id))
+                              );
                               const secondaryText =
                                 lens === "venue"
                                   ? s.cohorts.join(", ")
