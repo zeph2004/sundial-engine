@@ -127,6 +127,24 @@ export interface SchemaStreamConfig {
   [key: string]: unknown;
 }
 
+export interface SoftConstraintRuleConfig {
+  enabled: boolean;
+  weight: number;
+  params?: Record<string, unknown>;
+}
+
+export interface OptimizerConfig {
+  enabled?: boolean;
+  max_iterations?: number;
+  initial_temperature?: number;
+  cooling_rate?: number;
+  min_temperature?: number;
+  swap_probability?: number;
+  guided_proposal_probability?: number;
+  random_seed?: number;
+  [key: string]: unknown;
+}
+
 export interface SchemaConfig {
   schema_version?: string;
   institution?: Record<string, unknown>;
@@ -140,9 +158,101 @@ export interface SchemaConfig {
     compatibility_map: Record<string, unknown>;
     [key: string]: unknown;
   };
-  soft_constraints?: Record<string, unknown>;
-  optimizer?: Record<string, unknown>;
+  soft_constraints?: Record<string, SoftConstraintRuleConfig>;
+  optimizer?: OptimizerConfig;
   [key: string]: unknown;
+}
+
+export interface SolveKPIs {
+  total_sessions: number;
+  assigned_sessions: number;
+  backtracks: number;
+  hard_violations: number;
+  tier1_affinity_pct: number;
+  tier1a_exact_pct: number;
+  saturday_sessions: number;
+  saturday_theory_sessions: number;
+  saturday_free_cohorts: number;
+  total_cohorts: number;
+  saturday_free_cohorts_pct: number;
+  evening_twilight_sessions: number;
+  objective_improvement_pct: number;
+}
+
+export interface SoftObjectiveBreakdown {
+  totalObjective: number;
+  weightedByRule: Record<string, number>;
+  rawByRule: Record<string, number>;
+  countsByRule: Record<string, number>;
+  weightsByRule: Record<string, number>;
+  enabledRules: string[];
+}
+
+export interface SolveScorecard {
+  enabled: boolean;
+  iterations?: number;
+  runtimeMs?: number;
+  initialObjective?: number;
+  finalObjective?: number;
+  bestObjective?: number;
+  improvementPct?: number;
+  acceptedMoves?: number;
+  improvingMoves?: number;
+  uphillMoves?: number;
+  rejectedMoves?: number;
+  initialBreakdown?: SoftObjectiveBreakdown;
+  finalBreakdown?: SoftObjectiveBreakdown;
+}
+
+export interface SaturdayExplanation {
+  cohort: string;
+  stream: string;
+  total_periods: number;
+  weekday_limit: number;
+  overflow_periods: number;
+  saturday_sessions: number;
+  reason: string;
+}
+
+export interface SolveResponse {
+  status: string;
+  generated_at: string;
+  solve_ms: number;
+  optimize_ms: number;
+  hard_violations: number;
+  kpis: SolveKPIs;
+  scorecard: SolveScorecard;
+  saturday_explanations: SaturdayExplanation[];
+  pinned_count: number;
+  timetable: PublicSession[];
+}
+
+export interface PinEntry {
+  session_id: string;
+  day: string;
+  day_idx: number;
+  start_period: number;
+  venue_id: number | string;
+}
+
+export interface PinsListResponse {
+  pinned_count: number;
+  pinned_assignments: Record<string, PinEntry>;
+}
+
+export interface PinUpsertResponse {
+  status: string;
+  pin: PinEntry;
+}
+
+export interface PinDeleteResponse {
+  status: string;
+  session_id: string;
+}
+
+export interface ClearPinsResponse {
+  status: string;
+  cleared_count: number;
 }
 
 export interface SettingsResponse {
@@ -419,5 +529,66 @@ export async function uploadEntityFile(
 export async function runPreflightValidation(): Promise<PreflightValidationResponse> {
   return apiFetch<PreflightValidationResponse>("/api/onboarding/validate", {
     method: "POST",
+  });
+}
+
+/* ==========================================================================
+   Solver & Session Pinning Endpoints (Sprint 5)
+   ========================================================================== */
+
+export async function runSolve(payload?: {
+  schema_override?: SchemaConfig | null;
+  use_pins?: boolean;
+  run_optimizer?: boolean;
+  max_iterations?: number;
+}): Promise<SolveResponse> {
+  return apiFetch<SolveResponse>("/api/solve", {
+    method: "POST",
+    body: JSON.stringify({
+      schema_override: payload?.schema_override ?? null,
+      use_pins: payload?.use_pins ?? true,
+      run_optimizer: payload?.run_optimizer ?? true,
+      ...(payload?.max_iterations !== undefined
+        ? { max_iterations: payload.max_iterations }
+        : {}),
+    }),
+  });
+}
+
+export async function getPins(): Promise<PinsListResponse> {
+  return apiFetch<PinsListResponse>("/api/pins");
+}
+
+export async function pinSession(
+  sessionId: string,
+  payload: { day_idx: number; start_period: number; venue_id: string | number }
+): Promise<PinUpsertResponse> {
+  return apiFetch<PinUpsertResponse>(
+    `/api/pins/${encodeURIComponent(sessionId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        day: payload.day_idx,
+        start_period: payload.start_period,
+        venue_id: payload.venue_id,
+      }),
+    }
+  );
+}
+
+export async function unpinSession(
+  sessionId: string
+): Promise<PinDeleteResponse> {
+  return apiFetch<PinDeleteResponse>(
+    `/api/pins/${encodeURIComponent(sessionId)}`,
+    {
+      method: "DELETE",
+    }
+  );
+}
+
+export async function clearAllPins(): Promise<ClearPinsResponse> {
+  return apiFetch<ClearPinsResponse>("/api/pins", {
+    method: "DELETE",
   });
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Calendar,
@@ -12,14 +12,13 @@ import {
   getPublicTimetable,
   logoutAdmin,
   type Branding,
-  type LensType,
+  type PublicSession,
   type PublicTimetableResponse,
 } from "../api/client";
-import { SearchableSelect } from "../components/SearchableSelect";
 import { SundialMark } from "../components/SundialMark";
-import { TimetableGrid } from "../components/TimetableGrid";
 import { DataOnboarding } from "./DataOnboarding";
 import { InstitutionSettings } from "./InstitutionSettings";
+import { SolverStudio } from "./SolverStudio";
 
 type StudioTab = "timetable" | "onboarding" | "settings";
 
@@ -35,24 +34,12 @@ export const StudioShell: React.FC = () => {
   const [branding, setBranding] = useState<Branding | null>(null);
   const [logoCacheKey, setLogoCacheKey] = useState<number>(() => Date.now());
   const [logoBroken, setLogoBroken] = useState(false);
-  const [lens, setLens] = useState<LensType>("cohort");
-  const [selectedId, setSelectedId] = useState<string>("");
 
   const refreshTimetable = () => {
     getPublicTimetable()
       .then((tt) => {
         setTimetable(tt);
         setBranding(tt.branding);
-        setSelectedId((prev) => {
-          const list =
-            lens === "cohort"
-              ? tt.entities.cohorts
-              : lens === "lecturer"
-                ? tt.entities.lecturers
-                : tt.entities.venues;
-          if (prev && list.some((e) => e.id === prev)) return prev;
-          return list[0]?.id ?? "";
-        });
       })
       .catch(() => {
         // Keep existing timetable view on transient error
@@ -72,8 +59,6 @@ export const StudioShell: React.FC = () => {
         if (!active || !tt) return;
         setTimetable(tt);
         setBranding(tt.branding);
-        const firstCohort = tt.entities.cohorts[0]?.id ?? "";
-        setSelectedId(firstCohort);
       })
       .catch(() => {
         if (!active) return;
@@ -98,30 +83,18 @@ export const StudioShell: React.FC = () => {
     );
   };
 
+  const handleTimetableUpdated = (nextSessions: PublicSession[]) => {
+    setTimetable((prev) =>
+      prev ? { ...prev, sessions: nextSessions, has_timetable: true } : prev
+    );
+    // Also refresh entities/grid_config in background
+    refreshTimetable();
+  };
+
   const handleLogout = () => {
     logoutAdmin();
     navigate("/login", { replace: true });
   };
-
-  const entityOptions = useMemo(() => {
-    if (!timetable) return [];
-    if (lens === "cohort") return timetable.entities.cohorts;
-    if (lens === "lecturer") return timetable.entities.lecturers;
-    return timetable.entities.venues;
-  }, [timetable, lens]);
-
-  const filteredSessions = useMemo(() => {
-    if (!timetable || !selectedId) return [];
-    if (lens === "cohort") {
-      return timetable.sessions.filter((s) => s.cohorts.includes(selectedId));
-    }
-    if (lens === "lecturer") {
-      return timetable.sessions.filter((s) => s.lecturers.includes(selectedId));
-    }
-    return timetable.sessions.filter(
-      (s) => String(s.venue_id) === String(selectedId)
-    );
-  }, [timetable, lens, selectedId]);
 
   if (!authChecked) {
     return (
@@ -131,10 +104,16 @@ export const StudioShell: React.FC = () => {
     );
   }
 
+  const isSolverView = activeTab === "timetable";
+
   return (
-    <div className="studio-shell">
+    <div className={`studio-shell ${isSolverView ? "is-solver-view" : ""}`}>
       <header className="studio-header">
-        <div className="studio-header-inner">
+        <div
+          className={`studio-header-inner ${
+            isSolverView ? "is-full-bleed" : ""
+          }`}
+        >
           <div className="studio-brand">
             <SundialMark size={24} />
             <span className="studio-wordmark">sundial</span>
@@ -203,57 +182,13 @@ export const StudioShell: React.FC = () => {
         </div>
       </header>
 
-      <main className="studio-main">
+      <main className={isSolverView ? "studio-main-solver" : "studio-main"}>
         {activeTab === "timetable" && timetable && (
-          <section className="studio-panel">
-            <div className="studio-panel-head">
-              <div>
-                <h2>Timetable preview</h2>
-                <p>
-                  {timetable.sessions.length.toLocaleString()} sessions placed ·{" "}
-                  <strong className="text-clear">0 clashes</strong>
-                </p>
-              </div>
-
-              <div className="studio-preview-controls">
-                <div className="lens-tabs">
-                  {(["cohort", "lecturer", "venue"] as LensType[]).map((l) => (
-                    <button
-                      key={l}
-                      type="button"
-                      className={`lens-tab ${lens === l ? "is-active" : ""}`}
-                      onClick={() => {
-                        setLens(l);
-                        const nextList =
-                          l === "cohort"
-                            ? timetable.entities.cohorts
-                            : l === "lecturer"
-                              ? timetable.entities.lecturers
-                              : timetable.entities.venues;
-                        setSelectedId(nextList[0]?.id ?? "");
-                      }}
-                    >
-                      {l.charAt(0).toUpperCase() + l.slice(1)}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ minWidth: 260 }}>
-                  <SearchableSelect
-                    options={entityOptions}
-                    value={selectedId}
-                    onChange={setSelectedId}
-                    placeholder={`Search ${lens}...`}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <TimetableGrid
-              sessions={filteredSessions}
-              gridConfig={timetable.grid_config}
-              lens={lens}
-            />
-          </section>
+          <SolverStudio
+            timetable={timetable}
+            onTimetableUpdated={handleTimetableUpdated}
+            onOpenOnboarding={() => setActiveTab("onboarding")}
+          />
         )}
 
         {activeTab === "onboarding" && (

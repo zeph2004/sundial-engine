@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Lock } from "lucide-react";
+import { Pin } from "lucide-react";
 import type { GridConfig, LensType, PublicSession } from "../api/client";
 
 export interface TimetableGridProps {
@@ -7,7 +7,8 @@ export interface TimetableGridProps {
   gridConfig: GridConfig;
   lens: LensType;
   pinnedSessionIds?: Set<string>;
-  onSessionClick?: (session: PublicSession) => void;
+  activePopoverSessionId?: string | null;
+  onSessionClick?: (session: PublicSession, anchorRect?: DOMRect) => void;
 }
 
 interface DayRowCell {
@@ -32,6 +33,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
   gridConfig,
   lens,
   pinnedSessionIds,
+  activePopoverSessionId,
   onSessionClick,
 }) => {
   const [hovered, setHovered] = useState<{
@@ -355,17 +357,32 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                                   className={cardClasses}
                                   role={onSessionClick ? "button" : undefined}
                                   tabIndex={onSessionClick ? 0 : undefined}
-                                  onClick={() => onSessionClick?.(s)}
+                                  onClick={(e) => {
+                                    if (!onSessionClick) return;
+                                    setHovered(null);
+                                    onSessionClick(
+                                      s,
+                                      e.currentTarget.getBoundingClientRect()
+                                    );
+                                  }}
                                   onKeyDown={(e) => {
                                     if (
                                       onSessionClick &&
                                       (e.key === "Enter" || e.key === " ")
                                     ) {
                                       e.preventDefault();
-                                      onSessionClick(s);
+                                      setHovered(null);
+                                      onSessionClick(
+                                        s,
+                                        e.currentTarget.getBoundingClientRect()
+                                      );
                                     }
                                   }}
-                                  onMouseEnter={(e) => handleMouseEnter(e, s)}
+                                  onMouseEnter={(e) => {
+                                    if (!activePopoverSessionId) {
+                                      handleMouseEnter(e, s);
+                                    }
+                                  }}
                                   onMouseLeave={() => setHovered(null)}
                                 >
                                   <div className="tt-card-row-top">
@@ -378,7 +395,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                                           className="tt-pin-icon"
                                           title="Pinned session"
                                         >
-                                          <Lock size={10} />
+                                          <Pin size={11} />
                                         </span>
                                       )}
                                       <span className="tt-type-badge">
